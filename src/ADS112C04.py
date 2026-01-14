@@ -5,7 +5,6 @@ from machine import (  # type: ignore
     SoftI2C,  # type: ignore
 )
 
-
 MUX_CODES = {
     (0,1): 0b0000,  # AIN0→AIN1
     (0,2): 0b0001,  # AIN0→AIN2
@@ -87,10 +86,10 @@ class ADS112C04:
         self.activeNegPin: int | None = None  # Initialize activeNegPin to None
 
         # FIXME: Unimplemented configuration options. We just assume that these are right for now.
-        self.pgaGain = 1  # Default gain is 1
+        self.pgaGain = -1  # Default gain is 1
 
         #FIXME: Make sure to measure the VDD pins before setting this!! Mine is at 5.15V.
-        self.vref = 5.15  # Internal reference is 2.048V but we set VDD to 5V and configure the device to use VDD as the reference voltage.
+        self.vref = 5  # Internal reference is 2.048V but we set VDD to 5V and configure the device to use VDD as the reference voltage.
 
 
         # Initialize the device
@@ -103,6 +102,11 @@ class ADS112C04:
 
         if self.readRegister(0) != bytes([0x00]) or self.readRegister(1) != bytes([0x00]):
             raise RuntimeError("Failed to reset ADS1112 device. Check connections and power supply.")
+
+        # Set the PGA to bypass
+        reg0 = self.readRegister(0)[0]
+        reg0 |= 0x01  # Set PGA_BYPASS bit
+        self.writeRegister(0, bytes([reg0]))
 
         self.activePosPin = None  # Reset active positive pin
         self.activeNegPin = None  # Reset active negative pin
@@ -152,7 +156,7 @@ class ADS112C04:
     def setInputPins(self,
                      AIN_Positive: int,
                      AIN_Negative: int = -1,
-                     gainValue: int = 1) -> bool:
+                     pgaGain: int = -1) -> bool:
         """Switch the active input channel for the ADS112.
 
         This function sets the MUX register to select the input channel for single-ended or differential readings. If a
@@ -160,45 +164,50 @@ class ADS112C04:
 
         [7:4] MUX[3:0] = MUX_CODES[ch] - Selects the input channel
         [3:1] GAIN[2:0] = Sets PGA gain
-        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read, or when gain = 1
+        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read, or when gain = -1
 
         """
-        # The MUX lookup table is built off of (+ve, -ve) tuples, where -1 indicates GND.
-        channel = (AIN_Positive, AIN_Negative)
 
-        # Validate the input channel
+        channel = (AIN_Positive, AIN_Negative)
         if channel not in MUX_CODES:
             raise ValueError(f"Invalid channel read configuration: {channel}")
-        if gainValue not in GAIN_SETTING:
-            raise ValueError(f"{gainValue} is not a valid gain value")
+        if pgaGain not in GAIN_SETTING and pgaGain != -1:
+            raise ValueError(f"{pgaGain} is not a valid gain value")
+        
+        # Any time we change the inputs, the first order of operation is to enable pga bypass to let us make switches
+        # without fear that the new channel's voltage with the old gain setting will not kill the ADC. We need to set
+        # the last four bits to zero as gains 8 to 128 ignore the bypass bit and use the PGA anyways.
+        reg0 = self.readRegister(0)[0]
+        reg0 &= 0xF0  # Clear the last four bits
+        reg0 |= 0x01  # Set to 0b0001: gain=1, bypass=1
+        self.writeRegister(0, bytes([reg0]))
 
         muxSetting = MUX_CODES[channel]  # Shift the MUX code to the correct position
-        gainSetting = GAIN_SETTING[gainValue]
-        if gainValue == 1:
-            pgaBypass = 0b1  # Bypass the programmable gain amplifier when gain is 1
+        # Read current Reg0, keep lower 4 bits (gain + bypass), replace only MUX
+        reg0 = (reg0 & 0x0F) | (muxSetting << 4)
+
+        if pgaGain == -1:
+            gainSetting = 0b000
+            pgaBypass = 0b1  # Bypass the PGA
         elif AIN_Negative == -1:
-            gainSetting = GAIN_SETTING[1]
-            pgaBypass = 0b1  # Force bypass the programmable gain amplifier when getting a single-ended reading
+            gainSetting = 0b000
+            pgaBypass = 0b1  # Single ended measurements always need PGA bypassed
             print("Attempted to use PGA on single-ended reading, PGA automatically bypassed")
         else:
+            gainSetting = GAIN_SETTING[pgaGain]
             pgaBypass = 0b0
 
-        registerValue = bytes([muxSetting << 4 |
-                               gainSetting << 1|
-                               pgaBypass])
-
-        self.writeRegister(0, registerValue)
+        reg0 = (reg0 & 0xF0) | (gainSetting << 1) | pgaBypass
+        self.writeRegister(0, bytes([reg0]))
 
         # Check for a successful write by reading the register back
-        readValue = self.readRegister(0)
-        if readValue != registerValue:
-            print(f"Failed to set MUX channel {channel}. Expected {registerValue}, got {readValue}")
+        check = self.readRegister(0)
+        if check[0] != reg0:
+            print(f"Failed to set MUX channel {channel}. Expected {reg0:#04x}, got {check[0]:#04x}")
             return False
-
-        # If the write was successful, update the active pins
-        self.activePosPin = channel[0]
-        self.activeNegPin = channel[1]
-        # print(f"Positive pin set to {channel[0]}, negative pin set to {channel[1]} (MUX code: 0x{muxSetting})")
+        else:
+            self.activePosPin = channel[0]
+            self.activeNegPin = channel[1]
         return True
 
     def setCurrentSource(self,
@@ -234,8 +243,9 @@ class ADS112C04:
         self.writeRegister(3, bytes([reg3])) # Route IDAC to channel
 
     def getReading(self,
-                           AIN_Pos: int,
-                           AIN_Neg: int = -1) -> float:
+                   AIN_Pos: int,
+                   AIN_Neg: int = -1,
+                   pgaGain: int = -1) -> float:
         """Get a single-ended conversion from the specified channel and returns a voltage.
 
         This function configures the ADS1112 to perform a single-ended conversion on the specified channel
@@ -247,14 +257,20 @@ class ADS112C04:
 
         """
 
+        # Set the MUX register to select the proper channel if it is not already set
+        if self.activePosPin != AIN_Pos or self.activeNegPin != AIN_Neg:
+            self.setInputPins(AIN_Positive=AIN_Pos, AIN_Negative=AIN_Neg, pgaGain=-1) # Force bypass
+
+            if pgaGain == -1:
+                self.setPGA(-1)
+            else:
+                self.setPGA(pgaGain)
+
         # Switch to continuous mode if not already in that mode
         if self.mode != "CONTINUOUS":
             self.setContinuousMode()
             self.mode = "CONTINUOUS"
 
-        # Set the MUX register to select the proper channel if it is not already set
-        if self.activePosPin != AIN_Pos or self.activeNegPin != AIN_Neg:
-            self.setInputPins(AIN_Positive=AIN_Pos, AIN_Negative=AIN_Neg)
 
         # Now send the first I2C frame which writes the RDATA command to the device.
         rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
@@ -275,7 +291,7 @@ class ADS112C04:
         # print(f"Read from ADS112C04: {bitString}")
 
         # Convert the raw ADC bits to a voltage
-        voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref, pgaGain=self.pgaGain)
+        voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
 
         return voltage
 
@@ -338,6 +354,43 @@ class ADS112C04:
 
         return buf  # Return the read data
 
+    def setPGA(self, gain: int) -> None:
+        """Set the Programmable Gain Amplifier (PGA) gain.
+
+        :param gain: The gain to set (1, 2, 4, 8, 16, 32, 64, 128), or -1 to disable PGA (bypass).
+        """
+        if gain == -1:
+            # Disable PGA (bypass): set bit 0 to 1, clear bits 3:1
+            reg0 = self.readRegister(0)[0]
+            reg0 &= ~0x0F  # Clear bits 3:0
+            reg0 |= 0x01   # Set bit 0 (PGA bypass)
+            self.writeRegister(0, bytes([reg0]))
+            check = self.readRegister(0)
+            if check[0] != reg0:
+                raise ValueError("Failed to disable PGA (bypass).")
+            print("PGA bypass enabled (disabled).")
+            self.pgaGain = -1  # For calculations, PGA is bypassed (gain=1)
+            return
+
+        if gain not in [1, 2, 4, 8, 16, 32, 64, 128]:
+            raise ValueError(f"Invalid gain value: {gain}. Valid values are: [1, 2, 4, 8, 16, 32, 64, 128, -1].")
+
+        # The PGA setting is in bits [3:1] of the MUX register
+        gain_to_bits = {1: 0b000, 2: 0b001, 4: 0b010, 8: 0b011, 16: 0b100, 32: 0b101, 64: 0b110, 128: 0b111}
+        pgaSetting = gain_to_bits[gain] << 1
+        reg0 = self.readRegister(0)[0]
+        reg0 &= ~0x0F  # Clear bits 3:0 (PGA gain + bypass)
+        reg0 |= pgaSetting  # Set new PGA gain
+        # Ensure PGA bypass is 0 (enabled)
+        self.writeRegister(0, bytes([reg0]))
+
+        check = self.readRegister(0)
+        if check[0] != reg0:
+            raise ValueError("Failed to set PGA gain.")
+
+        print(f"Successfully set PGA gain to {gain}.")
+        self.pgaGain = gain  # Update the instance variable
+
     def benchmarkReadings(self,
                           posChannel: int,
                           negChannel: int=-1,
@@ -395,12 +448,11 @@ class ADS112C04:
     def _bitsToVoltage(self,
                        msb: int,
                        lsb: int,
-                       vref: float = 5.0,
-                       pgaGain: int = 1) -> float:
+                       vref: float = 5.0) -> float:
         """Convert the raw ADC bits to a voltage."""
         raw = (msb << 8) | lsb  # Combine MSB and LSB
         if raw & 0x8000:  # If the sign bit is set
             raw -= 1 << 16  # Convert to negative value
-        voltage = raw * (vref / 2**15) / pgaGain
+        voltage = raw * (vref / 2**15) / abs(self.pgaGain)
         return voltage
 

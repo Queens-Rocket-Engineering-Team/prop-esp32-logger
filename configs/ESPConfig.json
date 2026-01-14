@@ -3,25 +3,31 @@
     "deviceType": "Sensor Monitor",
     "sensorInfo": {
         "thermocouples": {
-            "TCNitrousRun": {
-                "ADCIndex" : 1,
-                "highPin" : 1,
-                "lowPin" : 0,
-                "type" : "K",
-                "units" : "C"
-            }
         },
 
         "pressureTransducers": {
-            "PTN2Supply": {
+            "PTCombustionChamber": {
                 "ADCIndex" : 3,
+                "pin" : 0,
+                "maxPressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTN2OSupply": {
+                "ADCIndex" : 4,
+                "pin" : 0,
+                "maxPressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTN2Supply": {
+                "ADCIndex" : 4,
                 "pin" : 1,
                 "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
-            "PTN2OSupply": {
-                "ADCIndex" : 3,
-                "pin" : 0,
+
+            "PTPreInjector": {
+                "ADCIndex" : 4,
+                "pin" : 2,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
@@ -30,33 +36,27 @@
                 "pin" : 3,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
-            },
-            "PTPreInjector": {
-                "ADCIndex" : 4,
-                "pin" : 2,
-                "maxPressure_PSI" : 1000,
-                "units" : "PSI"
             }
         },
 
         "loadCells": {
+            "LCFill": {
+                "ADCIndex" : 2,
+                "highPin" : 1,
+                "lowPin" : 0,
+                "loadRating_N" : 889.644,
+                "excitation_V" : 5,
+                "sensitivity_vV" : 36,
+                "units" : "kg"
+            },
             "LCThrust": {
                 "ADCIndex" : 3,
                 "highPin" : 3,
                 "lowPin" : 2,
                 "loadRating_N" : 5000,
-                "excitation_V" : 10,
+                "excitation_V" : 5,
                 "sensitivity_vV" : 2,
-                "units" : "N"
-            },
-            "LCFill": {
-                "ADCIndex" : 2,
-                "highPin" : 1,
-                "lowPin" : 0,
-                "loadRating_N" : 5000,
-                "excitation_V" : 10,
-                "sensitivity_vV" : 2,
-                "units" : "N"
+                "units" : "kg"
             }
         }
     },

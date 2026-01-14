@@ -27,13 +27,18 @@ class LoadCell(Sensor):
         )
         self.maxWeight = loadRating_N
         self.fullScaleVoltage = excitation_V * (sensitivity_vV / 1000)  # input sensitivity in mV/V
+        self.pgaGain = 8
 
         if self.units not in ["kg", "N", "V"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'kg', 'N', and 'V'.")
 
     def takeData(self, unit: str = "DEF") -> float:
         """Take a reading from the load cell and add it to the data list."""
+        if self.ADC and self.ADC.pgaGain != self.pgaGain:
+            self.ADC.setPGA(self.pgaGain)
+
         vReading = self._getVoltageReading()
+
         if unit == "DEF":
             readingUnit = self.units
         else:
@@ -41,16 +46,13 @@ class LoadCell(Sensor):
 
         if readingUnit == "kg":
             kg = self._convertVoltageToKg(vReading)
-            self.data.append(kg)
             return kg
 
         if readingUnit == "N":
             n = self._convertVoltageToNewton(vReading)
-            self.data.append(n)
             return n
 
         if readingUnit == "V":
-            self.data.append(vReading)
             return vReading
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'kg', 'N', and 'V'.")
