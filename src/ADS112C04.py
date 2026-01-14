@@ -221,12 +221,12 @@ class ADS112C04:
             raise ValueError(f"Failed to set IDAC, identifier IDAC{idacNum} does not exist.")
 
         reg2arr = self.readRegister(2)
-        reg2 = reg2arr[1] # ignore status byte
+        reg2 = reg2arr[0]
         reg2 = (reg2 & 0b11111000) | IDAC_CURRENT[current]
         self.writeRegister(2, bytes([reg2])) # Set IDAC current (will also change current for other IDAC, be careful)
 
         reg3arr = self.readRegister(3)
-        reg3 = reg3arr[1] # ignore status byte
+        reg3 = reg3arr[0]
         if idacNum == 1:
             reg3 = (reg3 & 0b00011111) | (IDAC_CODES[channel] << 5)
         else:
@@ -314,7 +314,7 @@ class ADS112C04:
         :return: The value read from the register.
         """
 
-        if register not in (0,1,2,3)
+        if register not in (0,1,2,3):
             raise ValueError(f"Attempted to read from invalid register: reg{register}")
         
         buf = bytearray(1)  # Buffer to hold the read data
