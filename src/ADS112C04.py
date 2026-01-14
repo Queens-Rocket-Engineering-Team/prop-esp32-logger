@@ -22,6 +22,45 @@ MUX_CODES = {
     # Other codes exist but are not used in this implementation. See data sheet.
 }
 
+VREF_BITS = {
+    2.048: 0b00,
+    0: 0b01,
+    5: 0b10,
+}
+
+GAIN_SETTING = {
+    1: 0b000,
+    2: 0b001,
+    4: 0b010,
+    8: 0b011,
+    16:0b100,
+    32: 0b101,
+    64:0b110,
+    128: 0b111,
+}
+
+IDAC_CURRENT = {
+    0: 0b000,
+    10: 0b001,
+    50: 0b010,
+    100: 0b011,
+    250: 0b100,
+    500: 0b101,
+    1000: 0b110,
+    1500:0b111,
+    # Current in uA
+}
+
+IDAC_CODES = {
+    -1: 0b000, # Disabled
+    0: 0b001, # IDAC→AIN0
+    1: 0b010, # IDAC→AIN1
+    2: 0b011, # IDAC→AIN2
+    3: 0b100, #IDAC→AIN3
+    4: 0b101, #IDAC→REFP
+    5: 0b110, #IDAC→REFN
+}
+
 # DRDY pin mappings for the ADS112 devices on the ADC Breakout board. #FIXME: Fix for PANDA
 # This is intended for comparison with self.addressI2C, which is the I2C address shifted left by 1 bit.
 DRDY_PINS = { #             A1↓  A0↓
@@ -30,13 +69,6 @@ DRDY_PINS = { #             A1↓  A0↓
     0b10001000: 15, # ADC2 - VDD, GND - has its DRDY pin on GPIO 15
     0b10001010: 16, # ADC3 - VDD, VDD - has its DRDY pin on GPIO 16
 }
-
-VREF_BITS = {
-    2.048: 0b00,
-    0: 0b01,
-    5: 0b10,
-}
-
 
 class ADS112C04:
     """ADS112C04 I2C ADC driver for ESP32."""
@@ -118,16 +150,17 @@ class ADS112C04:
         self.start()  # Start continuous conversion mode
 
     def setInputPins(self,
-                        AIN_Positive: int,
-                        AIN_Negative: int = -1) -> None:
+                     AIN_Positive: int,
+                     AIN_Negative: int = -1,
+                     gainValue: int = 1) -> bool:
         """Switch the active input channel for the ADS112.
 
         This function sets the MUX register to select the input channel for single-ended or differential readings. If a
         reading is single-ended, the negative input is set to GND (-1).
 
         [7:4] MUX[3:0] = MUX_CODES[ch] - Selects the input channel
-        [3:1] GAIN[2:0] = 0b000 - Sets gain to 1
-        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read
+        [3:1] GAIN[2:0] = Sets PGA gain
+        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read, or when gain = 1
 
         """
         # The MUX lookup table is built off of (+ve, -ve) tuples, where -1 indicates GND.
@@ -136,13 +169,22 @@ class ADS112C04:
         # Validate the input channel
         if channel not in MUX_CODES:
             raise ValueError(f"Invalid channel read configuration: {channel}")
+        if gainValue not in GAIN_SETTING:
+            raise ValueError(f"{gainValue} is not a valid gain value")
 
         muxSetting = MUX_CODES[channel]  # Shift the MUX code to the correct position
-        gainSetting = 0b000  # Gain set to 1
-        pgaBypass = 0b1  # Bypass the programmable gain amplifier for
+        gainSetting = GAIN_SETTING[gainValue]
+        if gainValue == 1:
+            pgaBypass = 0b1  # Bypass the programmable gain amplifier when gain is 1
+        elif AIN_Negative == -1:
+            gainSetting = GAIN_SETTING[1]
+            pgaBypass = 0b1  # Force bypass the programmable gain amplifier when getting a single-ended reading
+            print("Attempted to use PGA on single-ended reading, PGA automatically bypassed")
+        else:
+            pgaBypass = 0b0
 
         registerValue = bytes([muxSetting << 4 |
-                               gainSetting << 1| #FIXME: Currently no way to change PGA setting. Always set to 1.
+                               gainSetting << 1|
                                pgaBypass])
 
         self.writeRegister(0, registerValue)
@@ -151,11 +193,45 @@ class ADS112C04:
         readValue = self.readRegister(0)
         if readValue != registerValue:
             print(f"Failed to set MUX channel {channel}. Expected {registerValue}, got {readValue}")
+            return False
+
+        # If the write was successful, update the active pins
+        self.activePosPin = channel[0]
+        self.activeNegPin = channel[1]
+        # print(f"Positive pin set to {channel[0]}, negative pin set to {channel[1]} (MUX code: 0x{muxSetting})")
+        return True
+
+    def setCurrentSource(self,
+                         idacNum: int,
+                         channel: int, 
+                         current: int) -> None:
+        """Set up an IDAC on the ADS112C04, routed to a specified channel
+        idacNum is 1 or 2
+        channel is IDAC output channel
+        current is restricted to numbers in IDAC_CURRENT
+        Reg2: [2,0] = IDAC current, shared between IDAC1 and IDAC2
+        Reg3: [7:5] = IDAC1 channel
+              [4:2] = IDAC2 channel
+        """
+        if current not in IDAC_CURRENT:
+            raise ValueError(f"Failed to set IDAC, invalid IDAC current: {current}uA")
+        if channel not in IDAC_CODES:
+            raise ValueError(f"Failed to set IDAC, invalid channel code: {channel}")
+        if idacNum not in (1,2):
+            raise ValueError(f"Failed to set IDAC, identifier IDAC{idacNum} does not exist.")
+
+        reg2arr = self.readRegister(2)
+        reg2 = reg2arr[1] # ignore status byte
+        reg2 = (reg2 & 0b11111000) | IDAC_CURRENT[current]
+        self.writeRegister(2, bytes([reg2])) # Set IDAC current (will also change current for other IDAC, be careful)
+
+        reg3arr = self.readRegister(3)
+        reg3 = reg3arr[1] # ignore status byte
+        if idacNum == 1:
+            reg3 = (reg3 & 0b00011111) | (IDAC_CODES[channel] << 5)
         else:
-            # If the write was successful, update the active pins
-            self.activePosPin = channel[0]
-            self.activeNegPin = channel[1]
-            # print(f"Positive pin set to {channel[0]}, negative pin set to {channel[1]} (MUX code: 0x{muxSetting})")
+            reg3 = (reg3 & 0b11100011) | (IDAC_CODES[channel] << 2)
+        self.writeRegister(3, bytes([reg3])) # Route IDAC to channel
 
     def getReading(self,
                            AIN_Pos: int,
@@ -213,7 +289,10 @@ class ADS112C04:
         # The WREG command is structured like: 0100 rrxx dddd dddd
         # Where rr is the register address and dddd dddd is the data to write.
         # This is sent in two parts: the command - 0100 rrxx, and the data - dddd dddd
-        wreg = 0x40 | ((register & 0x03) << 2)  # We know register only 0-3, so mask with 0x03 then shift to correct position.
+        if register not in (0,1,2,3):
+            raise ValueError(f"Attempted to write to invalid register: reg{register}")
+        
+        wreg = 0x40 | (register << 2)  # Shift register to correct position.
         wregBytes = bytes([wreg])  # Convert to bytes for I2C write
 
         self._addressDevice(read=False)
@@ -235,6 +314,9 @@ class ADS112C04:
         :return: The value read from the register.
         """
 
+        if register not in (0,1,2,3)
+            raise ValueError(f"Attempted to read from invalid register: reg{register}")
+        
         buf = bytearray(1)  # Buffer to hold the read data
 
         # The RREG command is structured like: 0010 rrxx
