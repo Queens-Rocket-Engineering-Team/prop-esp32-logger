@@ -1,0 +1,61 @@
+# noqa: INP001 -- Implicit namespace doesn't matter here
+from ADS112C04 import ADS112C04  # Importing the ADS112C04 class for external ADCs
+from sensors.Sensor import Sensor  # Importing the base Sensor class
+
+
+class Thermistor(Sensor):
+    """Class for reading thermistor data from an ADC.
+
+    UNFINISHED. Don't use this yet. Need to see how the circuitry works out
+
+    """
+
+    def __init__ (self,
+                  name: str,
+                  ADCIndex: int,
+                  ADC: ADS112C04 | None,  # Optional ADS112C04 instance for external ADCs. None if using the ESP32 ADC.
+                  highPin: int,
+                  lowPin: int,
+                  units: str,
+                  thermoType: str,
+                  ):
+
+        super().__init__(
+            name=name,
+            ADCIndex=ADCIndex,
+            ADC=ADC,  # No external ADC for thermocouples
+            highPin=highPin,
+            lowPin=lowPin,
+            units=units,
+        )
+
+        if self.units not in ["V", "C"]:
+            raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
+
+        self.type = thermoType
+
+
+    def takeData(self, unit="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
+        """Take a reading from the thermistor and add it to the data list."""
+        reading = self._getVoltageReading()
+
+        if unit == "DEF":
+            readingUnit = self.units
+        else:
+            readingUnit = unit
+
+        if readingUnit == "V":
+            self.data.append(reading)
+            return reading
+
+        if readingUnit == "C":
+            self.data.append(self._convertVoltageToTemperature(reading))
+            return self._convertVoltageToTemperature(reading)
+
+        raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
+
+    def _convertVoltageToTemperature(self, voltage: float) -> float:
+        """Convert the voltage reading to temperature in Celsius.
+        
+        """
+        return voltage

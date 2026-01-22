@@ -1,0 +1,78 @@
+{
+    "deviceName": "ESP32-GSE",
+    "deviceType": "Sensor Monitor",
+
+    "sensorInfo": { 
+
+        "loadCells": {
+            "LCXX": {
+                "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+                "highPin" : "Integer for High Pin",
+                "lowPin" : "Integer for Low Pin",
+                "loadRating_N" : "Integer Load Rating in N",
+                "excitation_V" : "Integer Excitation Voltage",
+                "sensitivity_vV" : "Integer Sensitivity in mV/V",
+                "unit" : "N or kg"
+            }
+        },
+
+        "thermistors": {
+            "TMXX-ASLAN1": {
+                "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+                "Pin" : "Integer for Pin",
+                "type" : "K",
+                "units" : "C"
+            },
+
+            "TMXX-ASLAN2": {
+                "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+                "Pin" : "Integer for Pin",
+                "type" : "K",
+                "units" : "C"
+            },
+
+            "TMXX-ASLAN3": {
+                "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+                "Pin" : "Integer for Pin",
+                "type" : "K",
+                "units" : "C"
+            }
+        }
+
+    },
+
+    "controls" : {
+        "Actuactor1":{ 
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        },
+        "Actuactor2":{
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        },
+        "Actuactor3":{
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        },
+        "Actuactor4":{
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        },
+
+        "Fan1":{
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        },
+
+        "Fan2":{
+            "pin" : "Integer for Pin",
+            "defaultState" : "OPEN",
+            "type" : "pneumatic"
+        }
+    }
+}
