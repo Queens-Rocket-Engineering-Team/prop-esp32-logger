@@ -7,3 +7,6 @@ AllowShortIfStatementsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
 BinPackParameters: false
 AlignAfterOpenBracket: Align
+AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterDefinitionReturnType: None
+PenaltyReturnTypeOnItsOwnLine: 1000

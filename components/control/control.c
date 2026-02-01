@@ -1,5 +1,8 @@
 #include "control.h"
+#include <esp_check.h>
 #include <stdbool.h>
+
+static const char *TAG = "CONTROL";
 
 esp_err_t control_init(control_t *control,
                        gpio_num_t gpio_num,
@@ -23,10 +26,7 @@ esp_err_t control_init(control_t *control,
     control->state = CONTROL_UNKNOWN; // State will be if set_control succeeds
     control->active = active;
 
-    esp_err_t err = gpio_reset_pin(gpio_num);
-    if (err != ESP_OK) {
-        return err;
-    }
+    ESP_RETURN_ON_ERROR(gpio_reset_pin(gpio_num), TAG, "Reset GPIO pin failed");
 
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << control->gpio_num),
@@ -35,10 +35,7 @@ esp_err_t control_init(control_t *control,
         .pull_down_en = GPIO_PULLDOWN_DISABLE, // Disable pull-down
         .intr_type = GPIO_INTR_DISABLE         // Disable interrupts
     };
-    err = gpio_config(&io_conf);
-    if (err != ESP_OK) {
-        return err;
-    }
+    ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config failed");
 
     return set_control(control, state);
 }
@@ -68,12 +65,10 @@ esp_err_t set_control(control_t *control, control_state_t state) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    esp_err_t err = gpio_set_level(control->gpio_num, level);
-    if (err == ESP_OK) {
-        control->state = state;
-    }
-
-    return err;
+    ESP_RETURN_ON_ERROR(gpio_set_level(control->gpio_num, level), TAG,
+                        "Failed to set GPIO pin level");
+    control->state = state;
+    return ESP_OK;
 }
 
 control_state_t get_control_state(const control_t *control) {
