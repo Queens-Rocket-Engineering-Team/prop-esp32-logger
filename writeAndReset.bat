@@ -1,5 +1,6 @@
 mpremote fs cp .\src\boot.py :/
-mpremote fs cp .\configs\ESPConfig.json :/
+mpremote fs cp .\src\setup.py :/
+mpremote fs cp .\configs\PandaV1\ESPConfig.json :/
 
 
 @REM mpremote fs cp .\src\SSDPTools.py :/

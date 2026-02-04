@@ -14,15 +14,9 @@ import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio 
 import socket  # type:ignore # socket is a micropython library
 
 import wifi_tools as wt
+import setup
 from machine import Pin  # type: ignore # machine is a micropython library
-from machine import SoftI2C  # type: ignore # SoftI2C is a micropython library for I2C communication
 
-from sensors.LoadCell import LoadCell  # type: ignore
-from sensors.PressureTransducer import PressureTransducer  # type: ignore
-from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
-from sensors.Current import Current  # type: ignore
-from Control import Control  # type: ignore # Importing the Valve class from Valve.py
-from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
 import TCPTools
 import commands
@@ -37,143 +31,17 @@ ERROR = 4       # Device has encountered an error. Will default to WAITING state
 CONFIG_FILE = "ESPConfig.json"
 TCP_PORT = 50000  # Port that I've chosen for the TCP server to listen on. This is the port that the master will connect to.
 
-WIFI_INDICATOR_PIN = Pin(21, Pin.OUT)
 SAFE24_PIN: Pin | None = None  # Pin for the SAFE24 switch, if used. Set to None if not used.
 IGNITOR_PIN: Pin | None = None  # Pin for the ignitor switch, if used. Set to None if not used.
 
-def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
-    try:
-        with open(filePath, "r") as file:
-            config = ujson.load(file)
-            return config
-    except Exception as e:
-        print(f"Failed to read config file: {e}")
-        return {}
+UDPRequests = ("SEARCH", # Message received when server is searching for client sensors
+               )
 
-def setupDeviceFromConfig(config: dict,
-                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer | Current],
-                                           dict[str, Control]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
-        """Initialize all devices and sensors from the config file.
-
-        ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
-        connection to an external ADC.
-        """
-
-        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer | Current] = {}
-        controls: dict[str, Control] = {}
-
-        print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
-        deviceType = config.get("deviceType", "Unknown")
-
-        if deviceType == "Sensor Monitor": # Sensor monitor is what I'm calling an ESP32 that reads sensors
-            sensorInfo = config.get("sensorInfo", {})
-
-            for name, details in sensorInfo.get("thermocouples", {}).items():
-
-                # Find the corresponding ADC for the thermocouple
-                adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
-                    adc = adcs[details["ADCIndex"] - 1]
-
-                sensors[name] = Thermocouple(
-                    name=name,
-                    ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
-                    highPin=details["highPin"],
-                    lowPin=details["lowPin"],
-                    units=details["units"],
-                    thermoType=details["type"],
-                )
-
-            for name, details in sensorInfo.get("pressureTransducers", {}).items():
-                # Find the corresponding ADC for the pressure transducer
-                adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
-                    adc = adcs[details["ADCIndex"] - 1]
-
-                sensors[name] = PressureTransducer(
-                    name=name,
-                    ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
-                    pinNumber=details["pin"],
-                    maxPressure_PSI=details["maxPressure_PSI"],
-                    units=details["units"],
-                )
-
-            for name, details in sensorInfo.get("loadCells", {}).items():
-
-                # Find the corresponding ADC for the load cell
-                adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
-                    adc = adcs[details["ADCIndex"] - 1]
-
-                sensors[name] = LoadCell(
-                    name=name,
-                    ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
-                    highPin=details["highPin"],
-                    lowPin=details["lowPin"],
-                    loadRating_N=details["loadRating_N"],
-                    excitation_V=details["excitation_V"],
-                    sensitivity_vV=details["sensitivity_vV"],
-                    units=details["units"],
-                )
-
-            for name, details in sensorInfo.get("current", {}).items():
-                # Find the corresponding ADC for the current sensor
-                adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
-                    adc = adcs[details["ADCIndex"] - 1]
-
-                sensors[name] = Current(
-                    name=name,
-                    ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
-                    pinNumber=details["pin"],
-                    shuntResistor_Ohms=details["shuntResistor_Ohms"],
-                    csaGain=details["csaGain"],
-                )
-
-            for name, details in config.get("controls", {}).items():
-                pin = details.get("pin", None)
-                defaultState = details.get("defaultState")
-
-                controls[name.upper()] = (Control(name=name.upper(),
-                                                controlType=details.get("type").upper(),  # Normalize type to upper case
-                                                pin=pin,
-                                                defaultState=defaultState,
-                                                ))
-
-            return sensors, controls
-
-        if deviceType == "Unknown":
-            raise ValueError("Device type not specified in config file")
-
-        return {}, {}  # Return empty dicts if no sensors or valves are defined
-
-# --------------------- #
-#    I2C FUNCTIONS
-# --------------------- #
-
-def setupI2C(): # Return an I2C bus object # noqa: ANN201
-    """Set up the I2C bus with the correct pins and frequency.
-
-    This function doesn't need input parameters because the pins and frequency are set by the hardware configuration,
-    and will never need to change.
-    The SCL pin is GPIO 6 on the ESP32, and the SDA pin is GPIO 7 on the ESP32.
-    """
-
-    # I2C bus 1, SCL pin 16, SDA pin 15, frequency 100kHz
-    i2cBus = SoftI2C(scl=Pin(16), sda=Pin(15), freq=100_000)
-    return i2cBus
-
-def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112C04]:
-    """Create a list of ADS112 devices on the I2C bus."""
-    devices = []
-    for addr in addresses:  # Create 4 devices
-        device = ADS112C04(softI2CBus, addr)
-        devices.append(device)
-    return devices
+TCPRequests = ("SREAD", # Reads a single value from all sensors
+               "CREAD", # Continuously reads data from all sensors until STOP received
+               "STOP", # Stops continuous reading
+               "STAT", # Returns number of sensors and types
+               )
 
 # --------------------- #
 #    ASYNC FUNCTIONS
@@ -200,15 +68,6 @@ async def sendConfig(socket: socket.socket,
     except Exception as e:
         print(f"Error sending config file: {e}")
 
-UDPRequests = ("SEARCH", # Message received when server is searching for client sensors
-               )
-
-TCPRequests = ("SREAD", # Reads a single value from all sensors
-               "CREAD", # Continuously reads data from all sensors until STOP received
-               "STOP", # Stops continuous reading
-               "STAT", # Returns number of sensors and types
-               )
-
 
 # -------------------- #
 #   SETUP THE DEVICE
@@ -216,21 +75,27 @@ TCPRequests = ("SREAD", # Reads a single value from all sensors
 state = INIT  # Device is initializing
 print("State = INIT")
 
+config = setup.readConfig(CONFIG_FILE)
+
+# Set up the WiFi indicator pin if specified in the config file
+WIFI_INDICATOR_PIN_NUM = config.get("wifiIndicatorPin", None)
+WIFI_INDICATOR_PIN = Pin(WIFI_INDICATOR_PIN_NUM, Pin.OUT) if WIFI_INDICATOR_PIN_NUM is not None else None
+
 # I2C Setup - Need to establish
-i2cBus = setupI2C()
-devices = i2cBus.scan() # Scan the I2C bus for devices. This will return a list of addresses of devices on the bus.
-adcs = makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices on the I2C bus
+i2cSDA = config.get("i2cBus", {}).get("sdaPin")
+i2cSCL = config.get("i2cBus", {}).get("sclPin")
+i2cFreq = config.get("i2cBus", {}).get("frequency_Hz")
+i2cBus = setup.setupI2C(i2cSCL, i2cSDA, i2cFreq)  # Set up the I2C bus
 
-# Internal setup methods
-config = readConfig(CONFIG_FILE)
-sensors, controls = setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
-
+# Scan for all I2C devices on the bus and set them up as ADS112C04 ADCs
+devices = i2cBus.scan()
+adcs = setup.makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices on the I2C bus
 
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
 # Networking setup
-wlan = wt.connectWifi("propnet", "propteambestteam")
-if wlan:
+wlan = wt.connectWifi("Hous-fi", "nothomeless") 
+if wlan and WIFI_INDICATOR_PIN is not None:
     WIFI_INDICATOR_PIN.on()
 
 ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
@@ -251,6 +116,8 @@ def run() -> None:
 
 async def main(state: int) -> None:
     global tcpListenerSocket  # noqa: PLW0603
+
+    sensors, controls = setup.setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
 
     # Set up some variables for the server state
     clientSock = None
