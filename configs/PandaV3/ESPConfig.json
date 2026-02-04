@@ -6,7 +6,7 @@
         "sclPin" : 22,
         "frequency_Hz" : 100000
     },
-    "wifiIndicatorPin": 21,
+
 
     "sensorInfo": {
         "thermocouples": {},

@@ -94,7 +94,7 @@ adcs = setup.makeI2CDevices(i2cBus, devices)  # Create a list of ADS112 devices 
 print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
 # Networking setup
-wlan = wt.connectWifi("Hous-fi", "nothomeless") 
+wlan = wt.connectWifi("Hous-fi", "nothomeless")
 if wlan and WIFI_INDICATOR_PIN is not None:
     WIFI_INDICATOR_PIN.on()
 
