@@ -26,7 +26,7 @@ class Sensor:
         # ADC MANAGEMENT
         # --------------------
         # Check if the ADCIndex is valid
-        if self.ADCIndex < 0 or self.ADCIndex > 4:
+        if self.ADCIndex < 0 or self.ADCIndex > 5:
             raise ValueError(f"Invalid ADCIndex: {self.ADCIndex}. Must be between 0 and 4.")
 
         if self.ADCIndex == 0:

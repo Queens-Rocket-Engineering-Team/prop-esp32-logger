@@ -7,33 +7,33 @@
 
         "pressureTransducers": {
             "PTCombustionChamber": {
-                "ADCIndex" : 3,
+                "ADCIndex" : 4,
                 "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTN2OSupply": {
                 "ADCIndex" : 4,
-                "pin" : 0,
+                "pin" : 1,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTN2Supply": {
-                "ADCIndex" : 4,
-                "pin" : 1,
+                "ADCIndex" : 2,
+                "pin" : 2,
                 "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
 
             "PTPreInjector": {
-                "ADCIndex" : 4,
-                "pin" : 2,
+                "ADCIndex" : 2,
+                "pin" : 3,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTRun": {
-                "ADCIndex" : 4,
-                "pin" : 3,
+                "ADCIndex" : 2,
+                "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             }
@@ -41,7 +41,7 @@
 
         "loadCells": {
             "LCFill": {
-                "ADCIndex" : 2,
+                "ADCIndex" : 1,
                 "highPin" : 1,
                 "lowPin" : 0,
                 "loadRating_N" : 889.644,
@@ -50,7 +50,7 @@
                 "units" : "kg"
             },
             "LCThrust": {
-                "ADCIndex" : 3,
+                "ADCIndex" : 1,
                 "highPin" : 3,
                 "lowPin" : 2,
                 "loadRating_N" : 5000,
@@ -58,47 +58,59 @@
                 "sensitivity_vV" : 2,
                 "units" : "kg"
             }
+        },
+
+        "current" : {
+            "ADCIndex" : 4,
+            "pin" : 2,
+            "shuntResistor_Ohms" : 0.025,
+            "csaGain" : 20
         }
     },
 
     "controls" : {
         "AVFill": {
-            "pin" : 43,
+            "pin" : 38,
             "defaultState" : "CLOSED",
             "type" : "solenoid"
         },
         "AVRun": {
-            "pin" : 44,
+            "pin" : 39,
             "defaultState" : "CLOSED",
             "type" : "solenoid"
         },
         "AVDump": {
-            "pin" : 42,
+            "pin" : 40,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
         "AVPurge1": {
-            "pin" : 1,
-            "defaultState" : "OPEN",
-            "type" : "solenoid"
-        },
-        "AVPurge2": {
-            "pin" : 2,
-            "defaultState" : "OPEN",
-            "type" : "solenoid"
-        },
-        "AVVent": {
             "pin" : 41,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
+        "AVPurge2": {
+            "pin" : 42,
+            "defaultState" : "OPEN",
+            "type" : "solenoid"
+        },
+        "AVVent": {
+            "pin" : 2,
+            "defaultState" : "OPEN",
+            "type" : "solenoid"
+        },
         "Safe24": {
-            "pin" : 40,
+            "pin" : 4,
             "defaultState" : "OPEN",
             "type" : "relay"
         },
-        "Ign": {
-            "pin" : 39,
+        "IgnPrime": {
+            "pin" : 6,
+            "defaultState" : "OPEN",
+            "type" : "relay"
+        },
+        "IgnRun": {
+            "pin" : 5,
             "defaultState" : "OPEN",
             "type" : "relay"
         }

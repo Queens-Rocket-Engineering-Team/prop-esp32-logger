@@ -1,3 +1,8 @@
+# BASE MICROPYTHON MAIN.PY-----------------------------------------------|
+# # This is all micropython code to be executed on the esp32 system level and doesn't require a __init__.py file
+
+# This file is executed after boot.py
+#------------------------------------------------------------------------|
 
 import ujson  # type:ignore # noqa: I001# ujson and machine are micropython libraries
 import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio library
@@ -26,6 +31,7 @@ ERROR = 4       # Device has encountered an error. Will default to WAITING state
 
 CONFIG_FILE = "ESPConfig.json"
 TCP_PORT = 50000  # Port that I've chosen for the TCP server to listen on. This is the port that the master will connect to.
+NUM_ADC = 5
 
 SW_SDA_PIN = 9
 SW_SCL_PIN = 10
@@ -64,7 +70,7 @@ def setupDeviceFromConfig(config: dict,
 
                 # Find the corresponding ADC for the thermocouple
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 sensors[name] = Thermocouple(
@@ -80,7 +86,7 @@ def setupDeviceFromConfig(config: dict,
             for name, details in sensorInfo.get("pressureTransducers", {}).items():
                 # Find the corresponding ADC for the pressure transducer
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 sensors[name] = PressureTransducer(
@@ -96,7 +102,7 @@ def setupDeviceFromConfig(config: dict,
 
                 # Find the corresponding ADC for the load cell
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 sensors[name] = LoadCell(
@@ -114,7 +120,7 @@ def setupDeviceFromConfig(config: dict,
             for name, details in sensorInfo.get("current", {}).items():
                 # Find the corresponding ADC for the current sensor
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 sensors[name] = Current(
@@ -156,7 +162,7 @@ def setupI2C(): # Return an I2C bus object # noqa: ANN201
     """
 
     # I2C bus 1, SCL pin 16, SDA pin 15, frequency 100kHz
-    i2cBus = SoftI2C(scl=Pin(16), sda=Pin(15), freq=100_000)
+    i2cBus = SoftI2C(scl=SW_SCL_PIN, sda=SW_SDA_PIN, freq=100_000)
     return i2cBus
 
 def makeI2CDevices(softI2CBus: SoftI2C.SoftI2C, addresses: list[int]) -> list[ADS112C04]:
@@ -182,7 +188,7 @@ async def sendConfig(socket: socket.socket,
 
             # Currently TCP block size is 2048 bytes, this can be changed if needed but config files are small right now.
             # This is meant as a warning block of code if we start having larger config files.
-            if len(confString) > 2048:
+            if len(confString) > 2048: # TODO increase config file size!!
                 raise ValueError("ERROR: Config file too large to send in one TCP block!!.")
 
 
@@ -368,4 +374,5 @@ def run() -> None:
     except KeyboardInterrupt:
         print("Server stopped gracefully...")
 
-run()  # type: ignore # noqa: F821 # This is created in the boot.py file
+
+run()
