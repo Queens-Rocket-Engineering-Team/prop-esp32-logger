@@ -1,85 +1,56 @@
 import socket
+import struct
 
 import uasyncio as asyncio  # type: ignore
 
+import protocol
 
-TCP_PORT = 50000  # Standard TCP port for ESP32 devices
+
+TCP_PORT = 50000
 
 class ConnectionClosedError(Exception):
     """Raised when the remote peer closes the connection."""
     pass
 
 
-def createListenerTCPSocket() -> socket.socket:
-    """Create a TCP socket and bind it to the TCP port."""
-    tcpSocket = socket.socket(socket.AF_INET,       # IPv4 socket
-                              socket.SOCK_STREAM)   # TCP socket
-    tcpSocket.setsockopt(socket.SOL_SOCKET,     # Socket level
-                         socket.SO_REUSEADDR,   # Reuseable option
-                         1)                     # Set to true
-    tcpSocket.setblocking(False)
-    tcpSocket.bind(("", TCP_PORT))  # Bind to all interfaces
-    tcpSocket.listen(1)  # Listen for incoming connections
-    return tcpSocket
+def connectToServer(server_ip, port=TCP_PORT):
+    """Create a TCP socket, blocking connect to server, then switch to non-blocking."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.connect((server_ip, port))
+    sock.setblocking(False)
+    return sock
 
-def createClientTCPSocket() -> socket.socket:
-    """Create a TCP socket and bind it to the TCP port."""
-    tcpSocket = socket.socket(socket.AF_INET,       # IPv4 socket
-                              socket.SOCK_STREAM)   # TCP socket
-    tcpSocket.setsockopt(socket.SOL_SOCKET,     # Socket level
-                         socket.SO_REUSEADDR,   # Reuseable option
-                         1)                     # Set to true
 
-    tcpSocket.setblocking(False)
-
-    return tcpSocket
-
-async def waitForConnection(listenerSock: socket.socket) -> tuple[socket.socket, tuple[str, int]]:
-    """Wait for a TCP connection and return the client socket and address.
-
-    Returns:
-        tuple: (client_socket, address)
-            - client_socket: Socket for communication with the connected client
-            - address: Tuple of (ip_address, port) of the connected client
-
-    """
-    while True:
+async def recvExact(sock, n):
+    """Read exactly n bytes from a non-blocking socket."""
+    buf = b""
+    while len(buf) < n:
         try:
-            # Accept returns (client_socket, address)
-            # where address is (ip, port)
-            client_socket, address = listenerSock.accept()
-            print(f"Connection accepted from {address[0]}:{address[1]}")
-
-            # Set client socket to non-blocking for async operations
-            client_socket.setblocking(False)
-
-            return client_socket, address
-
-        except OSError:
-            # EAGAIN is raised when no data is available
-            await asyncio.sleep(0.1)
-        except Exception as e:
-            print(f"TCPTools waitForConnection error: {e}")
-            await asyncio.sleep(0.1)
-
-
-
-async def waitForCommand(serverSock: socket.socket) -> list[str]:
-    """Wait for a command to come in on the TCP socket and yields the command as a string."""
-    while True:
-        try:
-            data = serverSock.recv(1024)
-            if not data:  # Socket was closed by peer
-                serverSock.close()
+            chunk = sock.recv(n - len(buf))
+            if not chunk:
                 raise ConnectionClosedError("Connection closed by peer")
-
-            # Split on new lines
-            return [cmd.strip() for cmd in data.decode("utf-8").split("\n") if cmd.strip()]
-
+            buf += chunk
         except OSError:
-            # No data available yet, yield to other tasks
-            await asyncio.sleep(0.1)
-        except Exception as e:
-            if not isinstance(e, ConnectionClosedError):
-                print(f"Error in waitForCommand: {e}")
-            raise
+            await asyncio.sleep(0)
+    return buf
+
+
+async def recvPacket(sock):
+    """Read one complete binary packet from the TCP stream.
+
+    Returns (packet_type, sequence, timestamp, payload).
+    """
+    header = await recvExact(sock, protocol.HEADER_SIZE)
+    _version, packet_type, sequence, length, timestamp = struct.unpack(protocol.HEADER_FMT, header)
+    payload_len = length - protocol.HEADER_SIZE
+    if payload_len > 0:
+        payload = await recvExact(sock, payload_len)
+    else:
+        payload = b""
+    return packet_type, sequence, timestamp, payload
+
+
+def sendPacket(sock, data):
+    """Send a complete packet over TCP."""
+    sock.sendall(data)

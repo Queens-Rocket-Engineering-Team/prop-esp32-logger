@@ -45,67 +45,71 @@ def readConfig(filePath: str) -> dict:  # type: ignore
         print(f"Failed to read config file: {e}")
         return {}
 
-def setupDeviceFromConfig(config: dict,
-                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer | Current],
-                                           dict[str, Control]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
+def setupDeviceFromConfig(config, adcs):
         """Initialize all devices and sensors from the config file.
 
         ADC index 0 indicates the sensor is connected directly to the ESP32. Any other index indicates
         connection to an external ADC.
+
+        Returns (sensors_dict, controls_dict, sensor_list, control_list).
+        sensor_list is ordered: thermocouples, pressure transducers, load cells, current sensors.
+        Index in sensor_list = sensor_id for DATA packets.
+        Index in control_list = command_id for CONTROL packets.
         """
 
-        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer | Current] = {}
-        controls: dict[str, Control] = {}
+        sensors = {}
+        controls = {}
+        sensor_list = []
+        control_list = []
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
         deviceType = config.get("deviceType", "Unknown")
 
-        if deviceType == "Sensor Monitor": # Sensor monitor is what I'm calling an ESP32 that reads sensors
+        if deviceType == "Sensor Monitor":
             sensorInfo = config.get("sensorInfo", {})
 
             for name, details in sensorInfo.get("thermocouples", {}).items():
-
-                # Find the corresponding ADC for the thermocouple
                 adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
                     adc = adcs[details["ADCIndex"] - 1]
 
-                sensors[name] = Thermocouple(
+                s = Thermocouple(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
+                    ADC=adc,
                     highPin=details["highPin"],
                     lowPin=details["lowPin"],
                     units=details["units"],
                     thermoType=details["type"],
                 )
+                sensors[name] = s
+                sensor_list.append(s)
 
             for name, details in sensorInfo.get("pressureTransducers", {}).items():
-                # Find the corresponding ADC for the pressure transducer
                 adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
                     adc = adcs[details["ADCIndex"] - 1]
 
-                sensors[name] = PressureTransducer(
+                s = PressureTransducer(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
+                    ADC=adc,
                     pinNumber=details["pin"],
                     maxPressure_PSI=details["maxPressure_PSI"],
                     units=details["units"],
                 )
+                sensors[name] = s
+                sensor_list.append(s)
 
             for name, details in sensorInfo.get("loadCells", {}).items():
-
-                # Find the corresponding ADC for the load cell
                 adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
                     adc = adcs[details["ADCIndex"] - 1]
 
-                sensors[name] = LoadCell(
+                s = LoadCell(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
+                    ADC=adc,
                     highPin=details["highPin"],
                     lowPin=details["lowPin"],
                     loadRating_N=details["loadRating_N"],
@@ -113,35 +117,39 @@ def setupDeviceFromConfig(config: dict,
                     sensitivity_vV=details["sensitivity_vV"],
                     units=details["units"],
                 )
+                sensors[name] = s
+                sensor_list.append(s)
 
             for name, details in sensorInfo.get("current", {}).items():
-                # Find the corresponding ADC for the current sensor
                 adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
                     adc = adcs[details["ADCIndex"] - 1]
 
-                sensors[name] = Current(
+                s = Current(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
+                    ADC=adc,
                     pinNumber=details["pin"],
                     shuntResistor_Ohms=details["shuntResistor_Ohms"],
                     csaGain=details["csaGain"],
                 )
+                sensors[name] = s
+                sensor_list.append(s)
 
             for name, details in config.get("controls", {}).items():
                 pin = details.get("pin", None)
                 defaultState = details.get("defaultState")
 
-                controls[name.upper()] = (Control(name=name.upper(),
-                                                controlType=details.get("type").upper(),  # Normalize type to upper case
-                                                pin=pin,
-                                                defaultState=defaultState,
-                                                ))
+                c = Control(name=name.upper(),
+                            controlType=details.get("type").upper(),
+                            pin=pin,
+                            defaultState=defaultState)
+                controls[name.upper()] = c
+                control_list.append(c)
 
-            return sensors, controls
+            return sensors, controls, sensor_list, control_list
 
         if deviceType == "Unknown":
             raise ValueError("Device type not specified in config file")
 
-        return {}, {}  # Return empty dicts if no sensors or valves are defined
+        return {}, {}, [], []

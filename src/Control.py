@@ -32,3 +32,10 @@ class Control:
 
         self.currentState = "CLOSED"
 
+    def setDefault(self) -> None:
+        """Set the control to its default state."""
+        if self.defaultState == "OPEN":
+            self.open()
+        else:
+            self.close()
+
