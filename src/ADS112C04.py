@@ -183,6 +183,7 @@ class ADS112C04:
         self.writeRegister(0, bytes([reg0]))
 
         muxSetting = MUX_CODES[channel]  # Shift the MUX code to the correct position
+
         # Read current Reg0, keep lower 4 bits (gain + bypass), replace only MUX
         reg0 = (reg0 & 0x0F) | (muxSetting << 4)
 
@@ -229,17 +230,15 @@ class ADS112C04:
         if idacNum not in (1,2):
             raise ValueError(f"Failed to set IDAC, identifier IDAC{idacNum} does not exist.")
 
-        reg2arr = self.readRegister(2)
-        reg2 = reg2arr[0]
-        reg2 = (reg2 & 0b11111000) | IDAC_CURRENT[current]
+        reg2 = self.readRegister(2)[0]
+        reg2 = (reg2 & 0xF8) | IDAC_CURRENT[current]
         self.writeRegister(2, bytes([reg2])) # Set IDAC current (will also change current for other IDAC, be careful)
 
-        reg3arr = self.readRegister(3)
-        reg3 = reg3arr[0]
+        reg3 = self.readRegister(3)[0]
         if idacNum == 1:
-            reg3 = (reg3 & 0b00011111) | (IDAC_CODES[channel] << 5)
+            reg3 = (reg3 & 0x1F) | (IDAC_CODES[channel] << 5)
         else:
-            reg3 = (reg3 & 0b11100011) | (IDAC_CODES[channel] << 2)
+            reg3 = (reg3 & 0xE3) | (IDAC_CODES[channel] << 2)
         self.writeRegister(3, bytes([reg3])) # Route IDAC to channel
 
     def getReading(self,
@@ -294,6 +293,49 @@ class ADS112C04:
         voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
 
         return voltage
+    
+    def getInternalTemp(self,
+                        AIN_Pos: int,
+                        AIN_Neg: int = -1) -> float:
+        """Get the temperature reading from the internal temperature sensor."""
+
+        reg1 = self.readRegister(1)[0]
+        reg1 = (0xFE) | 0x01 # Enable temperature sensor
+        reg1 = reg1 & ~0x08 # Set single-shot mode
+        self.writeRegister(1, bytes([reg1]))
+
+        # Start the temperature sensor conversion
+        startCommand = bytes([0x08])     # START/SYNC command is 0000 1000
+        self._addressDevice(read=False)  # Address the device for writing
+        self.i2c.write(startCommand)     # Send the START/SYNC command
+
+        time.sleep(0.5) #TODO Remove this pause
+
+        # Now send the first I2C frame which writes the RDATA command to the device.
+        rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
+        self._addressDevice(read=False)  # Address the device for writing
+        self.i2c.write(rdataCommand)     # Send the RDATA command
+
+        # Now re-address the device for reading and it will return the conversion result.
+        self._addressDevice(read=True)  # Address the device for reading
+
+        # This is a 16-bit result, so the device will return two transmissions. The first is the MSB and the second is
+        # the LSB. We read them separately so that we acknowledge the first byte and then read the second byte.
+        buf = bytearray(2)  # Buffer to hold the read data
+        self.i2c.readinto(buf)  # Read the 2 bytes of data into
+        self.i2c.stop()  # Stop the I2C transmission and pull the
+
+        # String together the bits of the bytearray for debugging. Unused for now.
+        bitString = " ".join(f"0b{byte:08b}" for byte in buf)
+        # print(f"Read from ADS112C04: {bitString}")
+
+        reg1 = reg1 & ~0x01 # Disable temperature sensor
+        self.writeRegister(1, bytes([reg1]))
+
+        # Convert the raw ADC bits to temperature (C)
+        temperature = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
+
+        return temperature
 
     def writeRegister(self, register: int, value: bytes) -> None:
         """Write a value to a specific register of the ADS112 device.
@@ -456,3 +498,14 @@ class ADS112C04:
         voltage = raw * (vref / 2**15) / abs(self.pgaGain)
         return voltage
 
+    def _bitsToTemperature(self,
+                           msb: int,
+                           lsb: int) -> float:
+        """Convert the raw ADC bits to a temperature.
+        To be used with the internal temperature sensor of the ADS112C04"""
+        raw = (msb << 8) | lsb  # Combine MSB and LSB
+        raw = raw >> 2 # 14 bit left-aligned reading
+        if raw & 0x2000:  # If the sign bit is set
+            raw -= 1 << 14  # Convert to negative value
+        temperature = raw / 0x20
+        return temperature
