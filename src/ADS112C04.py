@@ -246,6 +246,7 @@ class ADS112C04:
                    AIN_Neg: int = -1,
                    pgaGain: int = -1) -> float:
         """Get a single-ended conversion from the specified channel and returns a voltage.
+        IMPORTANT: Function divides by pgaGain to give real voltage.
 
         This function configures the ADS1112 to perform a single-ended conversion on the specified channel
         and returns the conversion result. Defaults to GND for the negative input if not specified.
@@ -291,12 +292,11 @@ class ADS112C04:
 
         # Convert the raw ADC bits to a voltage
         voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
+        voltage /= self.pgaGain
 
         return voltage
     
-    def getInternalTemp(self,
-                        AIN_Pos: int,
-                        AIN_Neg: int = -1) -> float:
+    def getInternalTemp(self) -> float:
         """Get the temperature reading from the internal temperature sensor."""
 
         reg1 = self.readRegister(1)[0]
@@ -309,7 +309,7 @@ class ADS112C04:
         self._addressDevice(read=False)  # Address the device for writing
         self.i2c.write(startCommand)     # Send the START/SYNC command
 
-        time.sleep(0.5) #TODO Remove this pause
+        time.sleep(0.05) #TODO Remove blocking
 
         # Now send the first I2C frame which writes the RDATA command to the device.
         rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
@@ -333,7 +333,7 @@ class ADS112C04:
         self.writeRegister(1, bytes([reg1]))
 
         # Convert the raw ADC bits to temperature (C)
-        temperature = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
+        temperature = self._bitsToTemperature(buf[0], buf[1])
 
         return temperature
 

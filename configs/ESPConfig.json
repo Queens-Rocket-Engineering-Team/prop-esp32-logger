@@ -61,10 +61,12 @@
         },
 
         "current" : {
-            "ADCIndex" : 4,
-            "pin" : 2,
-            "shuntResistor_Ohms" : 0.025,
-            "csaGain" : 20
+            "ignCurrent" : {
+                "ADCIndex" : 4,
+                "pin" : 2,
+                "shuntResistor_Ohms" : 0.025,
+                "csaGain" : 20
+            }
         }
     },
 

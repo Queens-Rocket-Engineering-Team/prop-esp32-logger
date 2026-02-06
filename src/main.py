@@ -69,14 +69,15 @@ def setupDeviceFromConfig(config: dict,
             for name, details in sensorInfo.get("thermocouples", {}).items():
 
                 # Find the corresponding ADC for the thermocouple
-                adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
-                    adc = adcs[details["ADCIndex"] - 1]
+                    adcT: ADS112C04 = adcs[details["ADCIndex"] - 1]
+                else:
+                    raise ValueError("Thermocouple must use ADS112C04")
 
                 sensors[name] = Thermocouple(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adc,  # Optional ADC for external ADCs
+                    ADC=adcT,  # Optional ADC for external ADCs
                     highPin=details["highPin"],
                     lowPin=details["lowPin"],
                     units=details["units"],
@@ -99,7 +100,6 @@ def setupDeviceFromConfig(config: dict,
                 )
 
             for name, details in sensorInfo.get("loadCells", {}).items():
-
                 # Find the corresponding ADC for the load cell
                 adc = None
                 if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
@@ -354,15 +354,22 @@ def run() -> None:
     print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
     # Networking setup
-    wlan = wt.connectWifi("propnet", "propteambestteam")
-    if wlan:
-        WIFI_INDICATOR_PIN.on()
+    #wlan = wt.connectWifi("propnet", "propteambestteam")
+    #if wlan:
+    #    WIFI_INDICATOR_PIN.on()
 
-    ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
-    tcpListenerSocket   = TCPTools.createListenerTCPSocket()
+    #ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
+    #tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
     state = WAITING  # Device is waiting for a master to connect
     print("State = WAITING")
+
+    input()
+    temp = adcs[1].getInternalTemp()
+    print(temp)
+
+    while True:
+        pass
 
     try:
         # Start the main event loop with the initial state
