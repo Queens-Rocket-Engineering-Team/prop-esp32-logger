@@ -5,7 +5,7 @@
         "thermocouples": {
         },
 
-        "pressureTransducers": {
+        "pressure_transducer": {
             "PTCombustionChamber": {
                 "ADCIndex" : 3,
                 "pin" : 0,
@@ -39,7 +39,7 @@
             }
         },
 
-        "loadCells": {
+        "load_cell": {
             "LCFill": {
                 "ADCIndex" : 2,
                 "highPin" : 1,
@@ -61,7 +61,7 @@
         }
     },
 
-    "controls" : {
+    "control" : {
         "AVFill": {
             "pin" : 43,
             "defaultState" : "CLOSED",

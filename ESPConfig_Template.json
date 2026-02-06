@@ -1,0 +1,33 @@
+{
+    "deviceName": "ESP32-XX or Camera-XX or etc...",
+    "deviceType": "Sensor Monitor or Camera or etc...",
+    "sensorInfo": {
+        "thermocouple": {
+            "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+            "highPin" : "Integer for High Pin",
+            "lowPin" : "Integer for Low Pin",
+            "type" : "K",
+            "units" : "C"
+        },
+        "pressure_transducer": {
+            "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+            "pin" : "Integer for pin",
+            "maxPressure_PSI" : "Integer for max pressure",
+            "units" : "psi"
+        },
+        "load_cell": {
+            "ADCIndex" : "integer for ADC its connected to. 0 is on board",
+            "highPin" : "Integer for High Pin",
+            "lowPin" : "Integer for Low Pin",
+            "loadRating_N" : "Integer Load Rating in N",
+            "excitation_V" : "Integer Excitation Voltage",
+            "sensitivity_vV" : "Integer Sensitivity in mV/V",
+            "unit" : "N or kg"
+        }
+    },
+    "control" : {
+        "pin" : "GPIO num",
+        "defaultState" : "CLOSED",
+        "type" : "solenoid"
+    }
+}
