@@ -292,7 +292,7 @@ class ADS112C04:
 
         # Convert the raw ADC bits to a voltage
         voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
-        voltage /= self.pgaGain
+        voltage /= abs(self.pgaGain)
 
         return voltage
     

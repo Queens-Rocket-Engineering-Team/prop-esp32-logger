@@ -18,9 +18,6 @@ class Thermocouple(Sensor):
                   units: str,
                   thermoType: str,
                   ):
-        
-        if not isinstance(ADC, ADS112C04):
-            raise ValueError(f"Invalid ADC. Thermocouple must use an ADS112C04.")
 
         super().__init__(
             name=name,
@@ -121,7 +118,6 @@ class Thermocouple(Sensor):
             return temperature
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
-
 
 
     def _convertTemperatureToVoltage(self, temperature: float) -> float:

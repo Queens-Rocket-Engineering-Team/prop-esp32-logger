@@ -67,6 +67,14 @@
                 "shuntResistor_Ohms" : 0.025,
                 "csaGain" : 20
             }
+        },
+
+        "resistance" : {
+            "ignResistance" : {
+                "ADCIndex" : 4,
+                "pin" : 3,
+                "injectedCurrent" : 1500
+            }
         }
     },
 

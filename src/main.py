@@ -16,6 +16,7 @@ from sensors.LoadCell import LoadCell  # type: ignore
 from sensors.PressureTransducer import PressureTransducer  # type: ignore
 from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
 from sensors.Current import Current  # type: ignore
+from sensors.Resistance import Resistance
 from Control import Control  # type: ignore # Importing the Valve class from Valve.py
 from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
 import SSDPTools
@@ -49,7 +50,7 @@ def readConfig(filePath: str):  # type: ignore  # noqa: ANN201
         return {}
 
 def setupDeviceFromConfig(config: dict,
-                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer | Current],
+                          adcs: list[ADS112C04]) -> tuple[dict[str, Thermocouple | LoadCell | PressureTransducer | Current | Resistance],
                                            dict[str, Control]]: # type: ignore  # Typing for the JSON object is impossible without the full Typing library
         """Initialize all devices and sensors from the config file.
 
@@ -57,7 +58,7 @@ def setupDeviceFromConfig(config: dict,
         connection to an external ADC.
         """
 
-        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer | Current] = {}
+        sensors: dict[str, Thermocouple | LoadCell | PressureTransducer | Current | Resistance] = {}
         controls: dict[str, Control] = {}
 
         print(f"Initializing device: {config.get('deviceName', 'Unknown Device')}")
@@ -77,7 +78,7 @@ def setupDeviceFromConfig(config: dict,
                 sensors[name] = Thermocouple(
                     name=name,
                     ADCIndex=details["ADCIndex"],
-                    ADC=adcT,  # Optional ADC for external ADCs
+                    ADC=adcT,
                     highPin=details["highPin"],
                     lowPin=details["lowPin"],
                     units=details["units"],
@@ -130,6 +131,22 @@ def setupDeviceFromConfig(config: dict,
                     pinNumber=details["pin"],
                     shuntResistor_Ohms=details["shuntResistor_Ohms"],
                     csaGain=details["csaGain"],
+                )
+
+            for name, details in sensorInfo.get("resistance", {}).items():
+
+                # Find the corresponding ADC for the resistance sense
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= NUM_ADC:
+                    adcT: ADS112C04 = adcs[details["ADCIndex"] - 1]
+                else:
+                    raise ValueError("Resistance read must use ADS112C04")
+
+                sensors[name] = Resistance(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adcT,
+                    pinNumber=details["pin"],
+                    injectedCurrent=details["injectedCurrent"],
                 )
 
             for name, details in config.get("controls", {}).items():
@@ -363,13 +380,22 @@ def run() -> None:
 
     state = WAITING  # Device is waiting for a master to connect
     print("State = WAITING")
+    resistance_candidate = sensors.get("ignResistance")
 
     input()
-    temp = adcs[1].getInternalTemp()
-    print(temp)
 
-    while True:
-        pass
+    import time
+    if isinstance(resistance_candidate, Resistance):
+        print("ign_resist_read success")
+        ignResistRead: Resistance = resistance_candidate
+        while True:
+            resistance = ignResistRead.takeData()
+            print(resistance)
+            time.sleep(0.5)
+    else:
+        while True:
+            pass
+        
 
     try:
         # Start the main event loop with the initial state
