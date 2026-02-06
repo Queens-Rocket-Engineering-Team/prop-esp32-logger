@@ -115,9 +115,9 @@ class Thermocouple(Sensor):
             return reading
         if readingUnit == "C":
             CJCTemp = self.ADC.getInternalTemp()
-            CJCVoltage = self._convertTemperatureToVoltage(CJCTemp)
-            thermocoupleVoltage = reading + CJCVoltage
-            temperature = self._convertVoltageToTemperature(thermocoupleVoltage)
+            CJCVoltage = self._convertTemperatureToVoltage(CJCTemp) # Convert C to mV
+            thermocoupleVoltage = reading*1e3 + CJCVoltage
+            temperature = self._convertVoltageToTemperature(thermocoupleVoltage)# Conversion from mV to C
             return temperature
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
