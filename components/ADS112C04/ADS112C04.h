@@ -21,6 +21,7 @@ esp_err_t ADS112C04_set_address(ADS112C04_t *ADS112C04, uint8_t addr);
 esp_err_t set_continuous_mode(ADS112C04_t *ADS112C04);
 esp_err_t set_single_shot_mode(ADS112C04_t *ADS112C04);
 
-esp_err_t ADS112C04_get_internal_temperature(ADS112C04_t *ADS112C04, float *temperature);
+esp_err_t ADS112C04_get_internal_temperature(ADS112C04_t *ADS112C04,
+                                             float *temperature);
 
 #endif

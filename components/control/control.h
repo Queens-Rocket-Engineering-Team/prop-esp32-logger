@@ -7,7 +7,11 @@
 
 // Control devices such as relays, solenoids etc.
 
-typedef enum { CONTROL_OPEN, CONTROL_CLOSED, CONTROL_UNKNOWN } control_state_t;
+typedef enum {
+    CONTROL_OPEN,
+    CONTROL_CLOSED,
+    CONTROL_UNKNOWN
+} control_state_t;
 
 typedef enum {
     OPEN_LOW, // Actuator open when GPIO low
