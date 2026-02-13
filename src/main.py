@@ -349,6 +349,16 @@ async def main(state: int,
                 tcpListenerSocket.close()  # Close the TCP listener socket
             break
 
+
+
+async def thermocoupleTesting(thermocouple_test):
+    while True:
+        temp = thermocouple_test.takeData()
+        print(temp)
+        await asyncio.sleep(1)
+
+
+
 def run() -> None:
     """Run the main event loop."""
 
@@ -380,32 +390,24 @@ def run() -> None:
 
     state = WAITING  # Device is waiting for a master to connect
     print("State = WAITING")
-    resistance_candidate = sensors.get("ignResistance")
 
-    input()
-
-    import time
-    if isinstance(resistance_candidate, Resistance):
-        print("ign_resist_read success")
-        ignResistRead: Resistance = resistance_candidate
-        while True:
-            resistance = ignResistRead.takeData()
-            print(resistance)
-            time.sleep(0.5)
-    else:
+    thermocouple_test = sensors.get("TCTest")
+    if thermocouple_test is None:
         while True:
             pass
-        
 
-    try:
-        # Start the main event loop with the initial state
-        asyncio.run(main(state,
-                         tcpListenerSocket,
-                         config,
-                         sensors,
-                         controls))
-    except KeyboardInterrupt:
-        print("Server stopped gracefully...")
+    import time
+    asyncio.run(thermocoupleTesting(thermocouple_test))
+        
+    #try:
+    #    # Start the main event loop with the initial state
+    #    asyncio.run(main(state,
+    #                     tcpListenerSocket,
+    #                     config,
+    #                     sensors,
+    #                     controls))
+    #except KeyboardInterrupt:
+    #    print("Server stopped gracefully...")
 
 
 run()

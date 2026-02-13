@@ -1,3 +1,4 @@
+import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio library
 import time
 
 from machine import (  # type: ignore
@@ -292,15 +293,14 @@ class ADS112C04:
 
         # Convert the raw ADC bits to a voltage
         voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
-        voltage /= abs(self.pgaGain)
 
         return voltage
     
-    def getInternalTemp(self) -> float:
+    async def getInternalTemp(self) -> float:
         """Get the temperature reading from the internal temperature sensor."""
 
         reg1 = self.readRegister(1)[0]
-        reg1 = (0xFE) | 0x01 # Enable temperature sensor
+        reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
         reg1 = reg1 & ~0x08 # Set single-shot mode
         self.writeRegister(1, bytes([reg1]))
 
@@ -309,7 +309,7 @@ class ADS112C04:
         self._addressDevice(read=False)  # Address the device for writing
         self.i2c.write(startCommand)     # Send the START/SYNC command
 
-        time.sleep(0.05) #TODO Remove blocking
+        await asyncio.sleep_ms(75) # type: ignore
 
         # Now send the first I2C frame which writes the RDATA command to the device.
         rdataCommand = bytes([0x10])     # RDATA command is 0001 0000

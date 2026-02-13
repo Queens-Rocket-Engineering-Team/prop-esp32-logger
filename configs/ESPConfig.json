@@ -3,6 +3,13 @@
     "deviceType": "Sensor Monitor",
     "sensorInfo": {
         "thermocouples": {
+            "TCTest": {
+                "ADCIndex" : 5,
+                "highPin" : 3,
+                "lowPin" : 2,
+                "type" : "K",
+                "units" : "C"
+            }
         },
 
         "pressureTransducers": {

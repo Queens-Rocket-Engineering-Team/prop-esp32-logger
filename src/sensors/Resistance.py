@@ -31,7 +31,7 @@ class Resistance(Sensor):
             self.ADC.setPGA(self.pgaGain)
 
         self.ADC.setCurrentSource(1, self.highPin, self.injectedCurrent)
-        time.sleep(0.1)
+
         vReading = self._getVoltageReading()
 
         try:

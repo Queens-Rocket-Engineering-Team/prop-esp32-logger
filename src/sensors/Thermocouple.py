@@ -1,6 +1,8 @@
 # noqa: INP001 -- Implicit namespace doesn't matter here
 from ADS112C04 import ADS112C04  # Importing the ADS112C04 class for external ADCs
 from sensors.Sensor import Sensor  # Importing the base Sensor class
+import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio library
+import time
 from math import exp
 
 
@@ -34,6 +36,10 @@ class Thermocouple(Sensor):
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
 
         self.type = thermoType
+
+        self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
+
+        self.CJCTemp = 0
 
         # Temperature to voltage coefficients
 
@@ -101,6 +107,14 @@ class Thermocouple(Sensor):
         if self.ADC and self.ADC.pgaGain != self.pgaGain:
             self.ADC.setPGA(self.pgaGain)
 
+        # ADC internal temp conversion is slow, so only get it every 1000 ms
+        #current_ms = time.ticks_ms() # type: ignore this is a micropython function
+        #if time.ticks_diff(current_ms, self.prevInternalTemp_ms) > 1000: #type: ignore
+        #    asyncio.create_task(self._updateInternalTemp())
+        #    self.prevInternalTemp_ms = current_ms
+
+        self.CJCTemp = 24
+
         reading = self._getVoltageReading()
 
         if unit == "DEF":
@@ -111,13 +125,16 @@ class Thermocouple(Sensor):
         if readingUnit == "V":
             return reading
         if readingUnit == "C":
-            CJCTemp = self.ADC.getInternalTemp()
-            CJCVoltage = self._convertTemperatureToVoltage(CJCTemp) # Convert C to mV
+            CJCVoltage = self._convertTemperatureToVoltage(self.CJCTemp) # Convert C to mV
             thermocoupleVoltage = reading*1e3 + CJCVoltage
             temperature = self._convertVoltageToTemperature(thermocoupleVoltage)# Conversion from mV to C
             return temperature
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
+
+
+    async def _updateInternalTemp(self):
+        self.CJCTemp = await self.ADC.getInternalTemp()
 
 
     def _convertTemperatureToVoltage(self, temperature: float) -> float:
