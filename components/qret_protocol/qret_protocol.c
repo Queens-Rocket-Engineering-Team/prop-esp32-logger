@@ -1,7 +1,7 @@
 #include "qret_protocol.h"
+#include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
-#include <stdbool.h>
 
 #define QRET_PROTOCOL_VERSION 0x02
 
@@ -149,12 +149,12 @@ static protocol_err_t _unpack_header(const uint8_t header[],
     return PROTOCOL_OK;
 }
 
-inline static bool _is_packet_header_only(protocol_packet_type_t packet_type);
+static bool _is_packet_header_only(protocol_packet_type_t packet_type);
 
 protocol_err_t make_header_only_packet(uint8_t packet[],
                                        size_t packet_len,
                                        protocol_packet_type_t packet_type,
-                                       generic_packet_t generic) {
+                                       header_only_packet_t header_only) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -171,9 +171,9 @@ protocol_err_t make_header_only_packet(uint8_t packet[],
     protocol_header_t header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = packet_type,
-        .sequence = generic.sequence,
+        .sequence = header_only.sequence,
         .data_length = 0,
-        .timestamp = generic.ts_offset,
+        .timestamp = header_only.ts_offset,
     };
 
     err = _pack_header(packet, HEADER_SIZE, header_data);
@@ -183,9 +183,9 @@ protocol_err_t make_header_only_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_status(uint8_t packet[],
-                           size_t packet_len,
-                           status_packet_t status) {
+protocol_err_t make_status_packet(uint8_t packet[],
+                                  size_t packet_len,
+                                  status_packet_t status) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -214,9 +214,9 @@ protocol_err_t make_status(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_stream_start(uint8_t packet[],
-                                 size_t packet_len,
-                                 stream_start_packet_t stream_start) {
+protocol_err_t make_stream_start_packet(uint8_t packet[],
+                                        size_t packet_len,
+                                        stream_start_packet_t stream_start) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -246,9 +246,9 @@ protocol_err_t make_stream_start(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_control(uint8_t packet[],
-                            size_t packet_len,
-                            control_packet_t control) {
+protocol_err_t make_control_packet(uint8_t packet[],
+                                   size_t packet_len,
+                                   control_packet_t control) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -278,7 +278,9 @@ protocol_err_t make_control(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_ack(uint8_t packet[], size_t packet_len, ack_packet_t ack) {
+protocol_err_t make_ack_packet(uint8_t packet[],
+                               size_t packet_len,
+                               ack_packet_t ack) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -309,9 +311,9 @@ protocol_err_t make_ack(uint8_t packet[], size_t packet_len, ack_packet_t ack) {
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_nack(uint8_t packet[],
-                         size_t packet_len,
-                         nack_packet_t nack) {
+protocol_err_t make_nack_packet(uint8_t packet[],
+                                size_t packet_len,
+                                nack_packet_t nack) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -342,9 +344,9 @@ protocol_err_t make_nack(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_timesync(uint8_t packet[],
-                             size_t packet_len,
-                             timesync_packet_t timesync) {
+protocol_err_t make_timesync_packet(uint8_t packet[],
+                                    size_t packet_len,
+                                    timesync_packet_t timesync) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -380,14 +382,97 @@ protocol_err_t make_timesync(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
+protocol_err_t make_data_packet(uint8_t packet[],
+                                size_t *packet_len,
+                                protocol_sensor_data_t sensor_data[],
+                                uint8_t sensor_data_len,
+                                data_packet_t data) {
+
+    if (packet == NULL || packet_len == NULL || sensor_data == NULL) {
+        return PROTOCOL_NULL_PTR_ERR;
+    }
+    const size_t data_size = 1 + (6 * sensor_data_len);
+    if (*packet_len < HEADER_SIZE + data_size) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+    *packet_len = HEADER_SIZE + data_size;
+
+    protocol_err_t err;
+
+    protocol_header_t header_data = {
+        .protocol_version = QRET_PROTOCOL_VERSION,
+        .packet_type = PT_DATA,
+        .sequence = data.sequence,
+        .data_length = data_size,
+        .timestamp = data.ts_offset,
+    };
+
+    err = _pack_header(packet, HEADER_SIZE, header_data);
+    if (err != PROTOCOL_OK) {
+        return err;
+    }
+
+    packet[HEADER_SIZE + 0] = sensor_data_len;
+
+    for (size_t i = 0; i < sensor_data_len; i++) {
+        size_t offset = HEADER_SIZE + 1 + (6 * i);
+        packet[offset + 0] = sensor_data[i].sensor_id;
+        packet[offset + 1] = sensor_data[i].unit;
+        uint32_t value_bytes;
+        memcpy(&value_bytes, &sensor_data[i].value, sizeof(uint32_t));
+        packet[offset + 2] = (uint8_t)(value_bytes >> 24);
+        packet[offset + 3] = (uint8_t)(value_bytes >> 16);
+        packet[offset + 4] = (uint8_t)(value_bytes >> 8);
+        packet[offset + 5] = (uint8_t)(value_bytes);
+    }
+    return PROTOCOL_OK;
+}
+
+protocol_err_t make_config_packet(uint8_t packet[],
+                                  size_t *packet_len,
+                                  const char json_config[],
+                                  size_t json_config_size,
+                                  config_packet_t config) {
+
+    if (packet == NULL || packet_len == NULL || json_config == NULL) {
+        return PROTOCOL_NULL_PTR_ERR;
+    }
+    if (json_config_size > 0 && json_config[json_config_size - 1] == '\0') {
+        json_config_size--; // Remove null terminator from json_config
+    }
+    if (*packet_len < HEADER_SIZE + json_config_size) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+    *packet_len = HEADER_SIZE + json_config_size;
+
+    protocol_err_t err;
+
+    protocol_header_t header_data = {
+        .protocol_version = QRET_PROTOCOL_VERSION,
+        .packet_type = PT_CONFIG,
+        .sequence = config.sequence,
+        .data_length = json_config_size,
+        .timestamp = config.ts_offset,
+    };
+
+    err = _pack_header(packet, HEADER_SIZE, header_data);
+    if (err != PROTOCOL_OK) {
+        return err;
+    }
+
+    memcpy(packet + HEADER_SIZE, json_config, json_config_size);
+
+    return PROTOCOL_OK;
+}
+
 protocol_err_t parse_packet(const uint8_t packet[],
                             size_t packet_len,
                             protocol_payload_t *payload) {
 
-    if (packet == NULL) {
+    if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
-    if (packet < HEADER_SIZE) {
+    if (packet_len < HEADER_SIZE) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
 
@@ -403,32 +488,50 @@ protocol_err_t parse_packet(const uint8_t packet[],
 
     switch (header_data.packet_type) {
     case PT_ESTOP:
-        break;
     case PT_DISCOVERY:
-        break;
-    case PT_TIMESYNC:
-        break;
-    case PT_CONTROL:
-        break;
+    case PT_STREAM_STOP:
+    case PT_GET_SINGLE:
+    case PT_HEARTBEAT:
     case PT_STATUS_REQUEST:
+        if (header_data.data_length != 0) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.header_only.sequence = header_data.sequence;
+        payload->payload_data.header_only.ts_offset = header_data.timestamp;
+        break;
+    case PT_STATUS: // TODO implement rest later
+        if (header_data.data_length != STATUS_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
     case PT_STREAM_START:
+        if (header_data.data_length != STREAM_START_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
-    case PT_STREAM_STOP:
+    case PT_CONTROL:
+        if (header_data.data_length != CONTROL_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
-    case PT_GET_SINGLE:
+    case PT_ACK:
+        if (header_data.data_length != ACK_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
-    case PT_HEARTBEAT:
+    case PT_NACK:
+        if (header_data.data_length != NACK_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
-    case PT_CONFIG:
+    case PT_TIMESYNC:
+        if (header_data.data_length != TIMESYNC_DATA_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
         break;
     case PT_DATA:
         break;
-    case PT_STATUS:
-        break;
-    case PT_ACK:
-        break;
-    case PT_NACK:
+    case PT_CONFIG:
         break;
     default:
         return PROTOCOL_INVALID_PACKET_TYPE;
@@ -450,16 +553,16 @@ static uint8_t _units_to_protocol(const char unit[]) {
     return UNIT_UNITLESS;
 }
 
-inline static bool _is_packet_header_only(protocol_packet_type_t packet_type) {
-    switch(packet_type) {
-        case PT_ESTOP:
-        case PT_DISCOVERY:
-        case PT_STREAM_STOP:
-        case PT_GET_SINGLE:
-        case PT_HEARTBEAT:
-        case PT_STATUS_REQUEST:
-            return true;
-        default:
-            return false;
+static bool _is_packet_header_only(protocol_packet_type_t packet_type) {
+    switch (packet_type) {
+    case PT_ESTOP:
+    case PT_DISCOVERY:
+    case PT_STREAM_STOP:
+    case PT_GET_SINGLE:
+    case PT_HEARTBEAT:
+    case PT_STATUS_REQUEST:
+        return true;
+    default:
+        return false;
     }
 }
