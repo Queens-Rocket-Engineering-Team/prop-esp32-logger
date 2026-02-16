@@ -1,26 +1,9 @@
 #include "qret_protocol.h"
 #include <stdint.h>
 #include <string.h>
+#include <stdbool.h>
 
 #define QRET_PROTOCOL_VERSION 0x02
-
-// Packet types - Server -> Device
-#define PT_ESTOP 0x00
-#define PT_DISCOVERY 0x01
-#define PT_TIMESYNC 0x02
-#define PT_CONTROL 0x03
-#define PT_STATUS_REQUEST 0x04
-#define PT_STREAM_START 0x05
-#define PT_STREAM_STOP 0x06
-#define PT_GET_SINGLE 0x07
-#define PT_HEARTBEAT 0x08
-
-// Packet types - Device -> Server
-#define PT_CONFIG 0x10
-#define PT_DATA 0x11
-#define PT_STATUS 0x12
-#define PT_ACK 0x13
-#define PT_NACK 0x14
 
 // Device status
 #define DS_INACTIVE 0x00
@@ -76,18 +59,7 @@ static const unit_map_t UNIT_MAP[] = {
     {"%",   UNIT_PERCENT     },
 };
 
-static uint8_t _units_to_protocol(const char unit[]) {
-    if (unit == NULL) {
-        return UNIT_UNITLESS;
-    }
-
-    for (size_t i = 0; i < sizeof(UNIT_MAP) / sizeof(UNIT_MAP[0]); i++) {
-        if (strcmp(unit, UNIT_MAP[i].unit) == 0) {
-            return UNIT_MAP[i].code;
-        }
-    }
-    return UNIT_UNITLESS;
-}
+static uint8_t _units_to_protocol(const char unit[]);
 
 // Error codes
 #define ERR_NONE 0x00
@@ -174,6 +146,40 @@ static protocol_err_t _unpack_header(const uint8_t header[],
                              ((uint32_t)header[6] << 16) |
                              ((uint32_t)header[7] << 8) | ((uint32_t)header[8]);
 
+    return PROTOCOL_OK;
+}
+
+inline static bool _is_packet_header_only(protocol_packet_type_t packet_type);
+
+protocol_err_t make_header_only_packet(uint8_t packet[],
+                                       size_t packet_len,
+                                       protocol_packet_type_t packet_type,
+                                       generic_packet_t generic) {
+
+    if (packet == NULL) {
+        return PROTOCOL_NULL_PTR_ERR;
+    }
+    if (packet_len != HEADER_SIZE) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+    if (!_is_packet_header_only(packet_type)) {
+        return PROTOCOL_INVALID_PACKET_TYPE;
+    }
+
+    protocol_err_t err;
+
+    protocol_header_t header_data = {
+        .protocol_version = QRET_PROTOCOL_VERSION,
+        .packet_type = packet_type,
+        .sequence = generic.sequence,
+        .data_length = 0,
+        .timestamp = generic.ts_offset,
+    };
+
+    err = _pack_header(packet, HEADER_SIZE, header_data);
+    if (err != PROTOCOL_OK) {
+        return err;
+    }
     return PROTOCOL_OK;
 }
 
@@ -396,39 +402,64 @@ protocol_err_t parse_packet(const uint8_t packet[],
     payload->packet_type = header_data.packet_type;
 
     switch (header_data.packet_type) {
-        case PT_ESTOP:
-            break;
-        case PT_DISCOVERY:
-            break;
-        case PT_TIMESYNC:
-            break;
-        case PT_CONTROL:
-            break;
-        case PT_STATUS_REQUEST:
-            break;
-        case PT_STREAM_START:
-            break;
-        case PT_STREAM_STOP:
-            break;
-        case PT_GET_SINGLE:
-            break;
-        case PT_HEARTBEAT:
-            break;
-        case PT_CONFIG:
-            break;
-        case PT_DATA:
-            break;
-        case PT_STATUS:
-            break;
-        case PT_ACK:
-            break;
-        case PT_NACK:
-            break;
-        default:
-            return PROTOCOL_INVALID_PACKET_TYPE;
+    case PT_ESTOP:
+        break;
+    case PT_DISCOVERY:
+        break;
+    case PT_TIMESYNC:
+        break;
+    case PT_CONTROL:
+        break;
+    case PT_STATUS_REQUEST:
+        break;
+    case PT_STREAM_START:
+        break;
+    case PT_STREAM_STOP:
+        break;
+    case PT_GET_SINGLE:
+        break;
+    case PT_HEARTBEAT:
+        break;
+    case PT_CONFIG:
+        break;
+    case PT_DATA:
+        break;
+    case PT_STATUS:
+        break;
+    case PT_ACK:
+        break;
+    case PT_NACK:
+        break;
+    default:
+        return PROTOCOL_INVALID_PACKET_TYPE;
     }
 
-
-
     return PROTOCOL_OK;
+}
+
+static uint8_t _units_to_protocol(const char unit[]) {
+    if (unit == NULL) {
+        return UNIT_UNITLESS;
+    }
+
+    for (size_t i = 0; i < sizeof(UNIT_MAP) / sizeof(UNIT_MAP[0]); i++) {
+        if (strcmp(unit, UNIT_MAP[i].unit) == 0) {
+            return UNIT_MAP[i].code;
+        }
+    }
+    return UNIT_UNITLESS;
+}
+
+inline static bool _is_packet_header_only(protocol_packet_type_t packet_type) {
+    switch(packet_type) {
+        case PT_ESTOP:
+        case PT_DISCOVERY:
+        case PT_STREAM_STOP:
+        case PT_GET_SINGLE:
+        case PT_HEARTBEAT:
+        case PT_STATUS_REQUEST:
+            return true;
+        default:
+            return false;
+    }
 }

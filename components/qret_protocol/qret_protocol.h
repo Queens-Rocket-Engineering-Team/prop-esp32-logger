@@ -9,6 +9,35 @@ typedef enum {
     PROTOCOL_VERSION_MISMATCH_ERR,
 } protocol_err_t;
 
+typedef enum {
+    // Packet types - Server -> Device
+    PT_ESTOP,
+    PT_DISCOVERY,
+    PT_TIMESYNC,
+    PT_CONTROL,
+    PT_STATUS_REQUEST,
+    PT_STREAM_START,
+    PT_STREAM_STOP,
+    PT_GET_SINGLE,
+    PT_HEARTBEAT,
+
+    // Packet types - Device -> Server
+    PT_CONFIG,
+    PT_DATA,
+    PT_STATUS,
+    PT_ACK,
+    PT_NACK,
+} protocol_packet_type_t;
+
+typedef struct {
+    uint8_t sequence;
+    uint32_t ts_offset;
+} generic_packet_t;
+
+protocol_err_t make_estop(uint8_t packet[],
+                          size_t packet_len,
+                          generic_packet_t estop);
+
 typedef struct {
     uint8_t device_status;
     uint8_t sequence;
@@ -72,7 +101,7 @@ protocol_err_t make_timesync(uint8_t packet[],
                              timesync_packet_t timesync);
 
 typedef struct {
-    uint8_t packet_type;
+    protocol_packet_type_t packet_type;
     union {
         status_packet_t status;
         stream_start_packet_t stream_start;
