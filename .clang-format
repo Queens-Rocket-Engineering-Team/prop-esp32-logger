@@ -11,3 +11,4 @@ AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
 PenaltyReturnTypeOnItsOwnLine: 1000
 AllowShortEnumsOnASingleLine: false
+AlignArrayOfStructures: Left

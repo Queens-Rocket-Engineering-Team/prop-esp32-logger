@@ -53,27 +53,25 @@ def define_struct(members: dict, struct_name: str, structs: list, file) -> None:
 #--------------------------------------------------------------------------#
 
 parser = argparse.ArgumentParser(description="Convert JSON config to .h header")
-parser.add_argument('template', type=str)
 parser.add_argument('config', type=str)
 parser.add_argument('outfile', type=str)
 args = parser.parse_args()
 
-template, template_str = read_json(args.template)
 config, config_str = read_json(args.config)
 structs = []
 
 try:
     with open(args.outfile, 'w') as header:
-        header.write('#ifndef ESPCONFIG_H\n')
-        header.write('#define ESPCONFIG_H\n')
+        header.write('#ifndef ESP_CONFIG_H\n')
+        header.write('#define ESP_CONFIG_H\n')
         header.write('\n')
         header.write('#include <stdbool.h>\n')
         header.write('\n')
         header.write('// Auto-generated header from ESPConfig.json\n')
         
-        header.write(f'\nconst char json_config[] = u8"{template_str}";\n')
+        header.write(f'\nstatic const char json_config[] = u8"{config_str}";\n')
 
-        nest_struct(template, 'config', structs, header)
+        #nest_struct(config, 'config', structs, header)
 
         header.write('\n#endif\n')
 

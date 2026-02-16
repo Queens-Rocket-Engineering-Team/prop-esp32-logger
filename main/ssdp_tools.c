@@ -1,4 +1,5 @@
 #include "ssdp_tools.h"
+#include <esp_err.h>
 #include <esp_log.h>
 #include <esp_netif.h>
 #include <getnameinfo.h>
@@ -13,12 +14,12 @@
 
 static const char *TAG = "SSDP";
 
-void ssdp_discover_server(char server_ip[],
-                          size_t server_ip_len,
-                          esp_netif_t *netif_handle) {
+esp_err_t ssdp_discover_server(char server_ip[],
+                               size_t server_ip_len,
+                               esp_netif_t *netif_handle) {
 
     if (server_ip_len < IPADDR_STRLEN_MAX) {
-        return;
+        return ESP_ERR_NO_MEM;
     }
 
     int err;
@@ -33,13 +34,13 @@ void ssdp_discover_server(char server_ip[],
 
     err = getaddrinfo(SSDP_ANY_IP, SSDP_PORT, &hints, &res);
     if (err != 0) {
-        return;
+        return ESP_FAIL;
     }
 
     int sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (sock == -1) {
         freeaddrinfo(res);
-        return;
+        return ESP_FAIL;
     }
 
     int enable = 1;
@@ -47,7 +48,7 @@ void ssdp_discover_server(char server_ip[],
     if (err != 0) {
         close(sock);
         freeaddrinfo(res);
-        return;
+        return ESP_FAIL;
     }
 
     // Bind the socket to port 1900, any ip
@@ -55,7 +56,7 @@ void ssdp_discover_server(char server_ip[],
     if (err != 0) {
         close(sock);
         freeaddrinfo(res);
-        return;
+        return ESP_FAIL;
     }
     freeaddrinfo(res);
 
@@ -71,12 +72,12 @@ void ssdp_discover_server(char server_ip[],
     err = inet_pton(AF_INET, SSDP_IP, &imreq.imr_multiaddr.s_addr);
     if (err != 1) {
         close(sock);
-        return;
+        return ESP_FAIL;
     }
     err = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imreq, sizeof imreq);
     if (err != 0) {
         close(sock);
-        return;
+        return ESP_FAIL;
     }
 
     // Listen for SSDP M-SEARCH from server
@@ -92,7 +93,7 @@ void ssdp_discover_server(char server_ip[],
 
         if (len < 0) {
             close(sock);
-            return;
+            return ESP_FAIL;
         }
 
         buf[len] = '\0'; // recvfrom does not null terminate buffer
@@ -111,4 +112,6 @@ void ssdp_discover_server(char server_ip[],
     char port_str[6];
     getnameinfo((struct sockaddr *)&remote_addr, remote_addr_len, server_ip,
                 server_ip_len, port_str, sizeof port_str, 0);
+
+    return ESP_OK;
 }
