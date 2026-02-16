@@ -12,22 +12,22 @@ typedef enum {
 } protocol_err_t;
 
 typedef enum {
-    // Packet types - Server -> Device
-    PT_ESTOP,
-    PT_DISCOVERY,
-    PT_TIMESYNC,
-    PT_CONTROL,
-    PT_STATUS_REQUEST,
-    PT_STREAM_START,
-    PT_STREAM_STOP,
-    PT_GET_SINGLE,
-    PT_HEARTBEAT,
-    // Packet types - Device -> Server
-    PT_CONFIG,
-    PT_DATA,
-    PT_STATUS,
-    PT_ACK,
-    PT_NACK,
+    // Server -> Device
+    PT_ESTOP = 0x00,
+    PT_DISCOVERY = 0x01,
+    PT_TIMESYNC = 0x02,
+    PT_CONTROL = 0x03,
+    PT_STATUS_REQUEST = 0x04,
+    PT_STREAM_START = 0x05,
+    PT_STREAM_STOP = 0x06,
+    PT_GET_SINGLE = 0x07,
+    PT_HEARTBEAT = 0x08,
+    // Device -> Server
+    PT_CONFIG = 0x10,
+    PT_DATA = 0x11,
+    PT_STATUS = 0x12,
+    PT_ACK = 0x13,
+    PT_NACK = 0x14,
 } protocol_packet_type_t;
 
 typedef struct {
@@ -111,25 +111,25 @@ typedef struct {
 } protocol_sensor_data_t;
 
 typedef struct {
+    protocol_sensor_data_t sensor_data[UINT8_MAX];
+    uint8_t sensor_count;
     uint8_t sequence;
     uint32_t ts_offset;
 } data_packet_t;
 
 protocol_err_t make_data_packet(uint8_t packet[],
                                 size_t *packet_len,
-                                protocol_sensor_data_t sensor_data[],
-                                uint8_t sensor_data_len,
                                 data_packet_t data);
 
 typedef struct {
+    const char *json_config;
+    uint32_t json_config_len;
     uint8_t sequence;
     uint32_t ts_offset;
 } config_packet_t;
 
 protocol_err_t make_config_packet(uint8_t packet[],
-                                  size_t packet_len,
-                                  const char json_config[],
-                                  size_t json_config_len,
+                                  size_t *packet_len,
                                   config_packet_t config);
 
 typedef struct {
