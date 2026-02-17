@@ -135,20 +135,30 @@ protocol_err_t make_config_packet(uint8_t packet[],
 typedef struct {
     protocol_packet_type_t packet_type;
     union {
-        header_only_packet_t header_only;
+        config_packet_t config;
+        data_packet_t data;
         status_packet_t status;
-        stream_start_packet_t stream_start;
-        control_packet_t control;
         ack_packet_t ack;
         nack_packet_t nack;
-        timesync_packet_t timesync;
-        data_packet_t data;
-        config_packet_t config;
     } payload_data;
-} protocol_payload_t;
+} server_payload_t;
 
-protocol_err_t parse_packet(const uint8_t packet[],
-                            size_t packet_len,
-                            protocol_payload_t *payload);
+protocol_err_t server_parse_packet(const uint8_t packet[],
+                                   size_t packet_len,
+                                   server_payload_t *payload);
+
+typedef struct {
+    protocol_packet_type_t packet_type;
+    union {
+        header_only_packet_t header_only;
+        timesync_packet_t timesync;
+        control_packet_t control;
+        stream_start_packet_t stream_start;
+    } payload_data;
+} client_payload_t;
+
+protocol_err_t client_parse_packet(const uint8_t packet[],
+                                   size_t packet_len,
+                                   client_payload_t *payload);
 
 #endif

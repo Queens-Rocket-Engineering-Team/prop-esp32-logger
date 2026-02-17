@@ -469,9 +469,9 @@ protocol_err_t make_config_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t parse_packet(const uint8_t packet[],
+protocol_err_t server_parse_packet(const uint8_t packet[],
                             size_t packet_len,
-                            protocol_payload_t *payload) {
+                            server_payload_t *payload) {
 
     if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -495,18 +495,6 @@ protocol_err_t parse_packet(const uint8_t packet[],
     payload->packet_type = header_data.packet_type;
 
     switch (header_data.packet_type) {
-    case PT_ESTOP:
-    case PT_DISCOVERY:
-    case PT_STREAM_STOP:
-    case PT_GET_SINGLE:
-    case PT_HEARTBEAT:
-    case PT_STATUS_REQUEST:
-        if (header_data.data_length != HEADER_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
-        }
-        payload->payload_data.header_only.sequence = header_data.sequence;
-        payload->payload_data.header_only.ts_offset = header_data.timestamp;
-        break;
     case PT_STATUS:
         if (header_data.data_length != STATUS_PACKET_SIZE) {
             return PROTOCOL_ARRAY_LEN_ERR;
@@ -514,25 +502,6 @@ protocol_err_t parse_packet(const uint8_t packet[],
         payload->payload_data.status.device_status = packet[HEADER_SIZE + 0];
         payload->payload_data.status.sequence = header_data.sequence;
         payload->payload_data.status.ts_offset = header_data.timestamp;
-        break;
-    case PT_STREAM_START:
-        if (header_data.data_length != STREAM_START_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
-        }
-        payload->payload_data.stream_start.stream_frequency =
-            ((uint16_t)packet[HEADER_SIZE + 0] << 8) |
-            (uint16_t)packet[HEADER_SIZE + 1];
-        payload->payload_data.stream_start.sequence = header_data.sequence;
-        payload->payload_data.stream_start.ts_offset = header_data.timestamp;
-        break;
-    case PT_CONTROL:
-        if (header_data.data_length != CONTROL_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
-        }
-        payload->payload_data.control.command_id = packet[HEADER_SIZE + 0];
-        payload->payload_data.control.command_state = packet[HEADER_SIZE + 1];
-        payload->payload_data.control.sequence = header_data.sequence;
-        payload->payload_data.control.ts_offset = header_data.timestamp;
         break;
     case PT_ACK:
         if (header_data.data_length != ACK_PACKET_SIZE) {
@@ -555,22 +524,6 @@ protocol_err_t parse_packet(const uint8_t packet[],
         payload->payload_data.nack.nack_error_code = packet[HEADER_SIZE + 2];
         payload->payload_data.nack.sequence = header_data.sequence;
         payload->payload_data.nack.ts_offset = header_data.timestamp;
-        break;
-    case PT_TIMESYNC:
-        if (header_data.data_length != TIMESYNC_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
-        }
-        payload->payload_data.timesync.server_time_ms =
-            ((uint64_t)packet[HEADER_SIZE + 0] << 56) |
-            ((uint64_t)packet[HEADER_SIZE + 1] << 48) |
-            ((uint64_t)packet[HEADER_SIZE + 2] << 40) |
-            ((uint64_t)packet[HEADER_SIZE + 3] << 32) |
-            ((uint64_t)packet[HEADER_SIZE + 4] << 24) |
-            ((uint64_t)packet[HEADER_SIZE + 5] << 16) |
-            ((uint64_t)packet[HEADER_SIZE + 6] << 8) |
-            (uint64_t)packet[HEADER_SIZE + 7];
-        payload->payload_data.timesync.sequence = header_data.sequence;
-        payload->payload_data.timesync.ts_offset = header_data.timestamp;
         break;
     case PT_DATA:
         uint8_t count = packet[HEADER_SIZE + 0];
@@ -608,6 +561,86 @@ protocol_err_t parse_packet(const uint8_t packet[],
         payload->payload_data.config.json_config =
             (const char *)(packet + (HEADER_SIZE + 4));
 
+        break;
+    default:
+        return PROTOCOL_INVALID_PACKET_TYPE;
+    }
+
+    return PROTOCOL_OK;
+}
+
+protocol_err_t client_parse_packet(const uint8_t packet[],
+                            size_t packet_len,
+                            client_payload_t *payload) {
+
+    if (packet == NULL || payload == NULL) {
+        return PROTOCOL_NULL_PTR_ERR;
+    }
+    if (packet_len < HEADER_SIZE) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+
+    protocol_err_t err;
+    protocol_header_t header_data = {0};
+
+    err = _unpack_header(packet, HEADER_SIZE, &header_data);
+    if (err != PROTOCOL_OK) {
+        return err;
+    }
+    if (packet_len != header_data.data_length) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+
+    // Tag the packet type
+    payload->packet_type = header_data.packet_type;
+
+    switch (header_data.packet_type) {
+    case PT_ESTOP:
+    case PT_DISCOVERY:
+    case PT_STREAM_STOP:
+    case PT_GET_SINGLE:
+    case PT_HEARTBEAT:
+    case PT_STATUS_REQUEST:
+        if (header_data.data_length != HEADER_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.header_only.sequence = header_data.sequence;
+        payload->payload_data.header_only.ts_offset = header_data.timestamp;
+        break;
+    case PT_STREAM_START:
+        if (header_data.data_length != STREAM_START_PACKET_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.stream_start.stream_frequency =
+            ((uint16_t)packet[HEADER_SIZE + 0] << 8) |
+            (uint16_t)packet[HEADER_SIZE + 1];
+        payload->payload_data.stream_start.sequence = header_data.sequence;
+        payload->payload_data.stream_start.ts_offset = header_data.timestamp;
+        break;
+    case PT_CONTROL:
+        if (header_data.data_length != CONTROL_PACKET_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.control.command_id = packet[HEADER_SIZE + 0];
+        payload->payload_data.control.command_state = packet[HEADER_SIZE + 1];
+        payload->payload_data.control.sequence = header_data.sequence;
+        payload->payload_data.control.ts_offset = header_data.timestamp;
+        break;
+    case PT_TIMESYNC:
+        if (header_data.data_length != TIMESYNC_PACKET_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.timesync.server_time_ms =
+            ((uint64_t)packet[HEADER_SIZE + 0] << 56) |
+            ((uint64_t)packet[HEADER_SIZE + 1] << 48) |
+            ((uint64_t)packet[HEADER_SIZE + 2] << 40) |
+            ((uint64_t)packet[HEADER_SIZE + 3] << 32) |
+            ((uint64_t)packet[HEADER_SIZE + 4] << 24) |
+            ((uint64_t)packet[HEADER_SIZE + 5] << 16) |
+            ((uint64_t)packet[HEADER_SIZE + 6] << 8) |
+            (uint64_t)packet[HEADER_SIZE + 7];
+        payload->payload_data.timesync.sequence = header_data.sequence;
+        payload->payload_data.timesync.ts_offset = header_data.timestamp;
         break;
     default:
         return PROTOCOL_INVALID_PACKET_TYPE;
