@@ -48,7 +48,7 @@ class Sensor:
         self.units = units
         self.data = []
 
-    def takeData(self) -> float:
+    def takeData(self) -> float | None:
         """Take a reading and return a value in the specified units.
 
         This is up for implementation in subclasses. The default implementation returns a voltage reading. A child class
@@ -57,7 +57,7 @@ class Sensor:
         """
         return self._getVoltageReading()
 
-    def _getVoltageReading(self) -> float:
+    def _getVoltageReading(self) -> float | None:
         # Native ESP32 ADC reading
         if self.ADCIndex == 0:
             if isinstance(self.lowPin, Pin):

@@ -6,6 +6,7 @@ import ujson
 
 from Control import Control
 from sensors.Current import Current
+from sensors.Resistance import Resistance
 from sensors.LoadCell import LoadCell
 from sensors.PressureTransducer import PressureTransducer
 from sensors.Thermocouple import Thermocouple
@@ -13,7 +14,7 @@ from sensors.Thermocouple import Thermocouple
 
 streamTask: asyncio.Task | None = None  # Task for streaming data from sensors
 
-async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current]) -> str:
+async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance]) -> str:
     """Get a single reading from each sensor and return it as a formatted string.
 
     Data string format is: <acqTime:timestamp>,<sensor1_name>:value,<sensor2_name>:value,...
@@ -26,7 +27,10 @@ async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer |
     dataDict["acqTime"] = acqTime
 
     for sensor in sensors.values():
-        dataDict[sensor.name] = sensor.takeData()
+        data = sensor.takeData()
+        if data is None:
+            continue
+        dataDict[sensor.name] = data
 
     # Format the data as a string
     timeString = f"time:{acqTime:.3f}"  # Format the acquisition time to 3 decimal places
@@ -39,7 +43,7 @@ async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer |
 
     return payload
 
-def strm(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current],
+def strm(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance],
          sock: socket.socket,
          args: list[str] | None = None,
          ) -> None:
@@ -131,7 +135,7 @@ def getStatus(controls: dict[str, Control]) -> str:
 
     return ujson.dumps(status)
 
-async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current],
+async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance],
                       sock: socket.socket,
                       frequency_hz: float | None,
                      ) -> None:

@@ -25,7 +25,7 @@ class Resistance(Sensor):
         self.pgaGain = -1 # Single-ended
         self.injectedCurrent = injectedCurrent
 
-    def takeData(self, unit: str = "DEF") -> float:
+    def takeData(self, unit: str = "DEF") -> float | None:
         """Take a reading from the resistance sense and add it to the data list."""
         if self.ADC and self.ADC.pgaGain != self.pgaGain:
             self.ADC.setPGA(self.pgaGain)
@@ -35,6 +35,9 @@ class Resistance(Sensor):
         vReading = self._getVoltageReading()
 
         try:
+            if vReading is None:
+                return None
+        
             if unit == "DEF":
                 readingUnit = self.units
             else:

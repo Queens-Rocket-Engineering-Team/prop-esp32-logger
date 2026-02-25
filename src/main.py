@@ -349,16 +349,6 @@ async def main(state: int,
                 tcpListenerSocket.close()  # Close the TCP listener socket
             break
 
-
-
-async def thermocoupleTesting(thermocouple_test):
-    while True:
-        temp = thermocouple_test.takeData()
-        print(temp)
-        await asyncio.sleep(1)
-
-
-
 def run() -> None:
     """Run the main event loop."""
 
@@ -377,37 +367,28 @@ def run() -> None:
     config = readConfig(CONFIG_FILE)
     sensors, controls = setupDeviceFromConfig(config, adcs)  # Initialize sensors from config file
 
-
     print("I2C devices found at following addresses:", [hex(device) for device in devices]) # Print the addresses of the devices found on the bus
 
     # Networking setup
-    #wlan = wt.connectWifi("propnet", "propteambestteam")
-    #if wlan:
-    #    WIFI_INDICATOR_PIN.on()
+    wlan = wt.connectWifi("propnet", "propteambestteam")
+    if wlan:
+        WIFI_INDICATOR_PIN.on()
 
-    #ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
-    #tcpListenerSocket   = TCPTools.createListenerTCPSocket()
+    ipAddress   = wlan.ifconfig()[0]  # Get the IP address of the ESP32
+    tcpListenerSocket   = TCPTools.createListenerTCPSocket()
 
     state = WAITING  # Device is waiting for a master to connect
     print("State = WAITING")
-
-    thermocouple_test = sensors.get("TCTest")
-    if thermocouple_test is None:
-        while True:
-            pass
-
-    import time
-    asyncio.run(thermocoupleTesting(thermocouple_test))
         
-    #try:
-    #    # Start the main event loop with the initial state
-    #    asyncio.run(main(state,
-    #                     tcpListenerSocket,
-    #                     config,
-    #                     sensors,
-    #                     controls))
-    #except KeyboardInterrupt:
-    #    print("Server stopped gracefully...")
+    try:
+        # Start the main event loop with the initial state
+        asyncio.run(main(state,
+                         tcpListenerSocket,
+                         config,
+                         sensors,
+                         controls))
+    except KeyboardInterrupt:
+        print("Server stopped gracefully...")
 
 
 run()

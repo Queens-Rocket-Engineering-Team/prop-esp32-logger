@@ -86,15 +86,18 @@ class ADS112C04:
         self.activePosPin: int | None = None  # Initialize activePosPin to None
         self.activeNegPin: int | None = None  # Initialize activeNegPin to None
 
-        # FIXME: Unimplemented configuration options. We just assume that these are right for now.
-        self.pgaGain = -1  # Default gain is 1
+        self.pgaGain = -1  # Default gain is 1 (PGA Bypassed)
 
         #FIXME: Make sure to measure the VDD pins before setting this!! Mine is at 5.15V.
         self.vref = 5  # Internal reference is 2.048V but we set VDD to 5V and configure the device to use VDD as the reference voltage.
 
-
         # Initialize the device
         self.resetDevice()
+
+        self.internalTemp = 0
+        self.updatingInternalTemp = False
+        asyncio.create_task(self._updateInternalTemp()) # Update the internal temperature at boot
+        self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
 
     def resetDevice(self) -> None:
         """Reset the ADS1112 device."""
@@ -245,7 +248,7 @@ class ADS112C04:
     def getReading(self,
                    AIN_Pos: int,
                    AIN_Neg: int = -1,
-                   pgaGain: int = -1) -> float:
+                   pgaGain: int = -1) -> float | None:
         """Get a single-ended conversion from the specified channel and returns a voltage.
         IMPORTANT: Function divides by pgaGain to give real voltage.
 
@@ -257,6 +260,9 @@ class ADS112C04:
         Then, if in single-shot mode, kick off the conversion by writing to the START/SYNC register.
 
         """
+
+        if self.updatingInternalTemp == True:
+            return None
 
         # Set the MUX register to select the proper channel if it is not already set
         if self.activePosPin != AIN_Pos or self.activeNegPin != AIN_Neg:
@@ -296,8 +302,12 @@ class ADS112C04:
 
         return voltage
     
-    async def getInternalTemp(self) -> float:
-        """Get the temperature reading from the internal temperature sensor."""
+    async def _updateInternalTemp(self) -> None:
+        """
+        Updates the cached internal temperature for the ADC.
+        Reading takes ~50ms, so this should only be called when needed.
+        """
+        self.updatingInternalTemp = True
 
         reg1 = self.readRegister(1)[0]
         reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
@@ -333,9 +343,20 @@ class ADS112C04:
         self.writeRegister(1, bytes([reg1]))
 
         # Convert the raw ADC bits to temperature (C)
-        temperature = self._bitsToTemperature(buf[0], buf[1])
+        self.internalTemp = self._bitsToTemperature(buf[0], buf[1])
+        self.updatingInternalTemp = False
+    
+    def getInternalTemp(self) -> float:
+        """Get the temperature reading from the internal temperature sensor.
+        If temperature is currently updating, returns last cached temp"""
 
-        return temperature
+        if (time.ticks_diff(time.ticks_ms(), self.prevInternalTemp_ms) > 10000 #type: ignore Only update temp after 10 seconds
+            and self.updatingInternalTemp == False):
+
+            asyncio.create_task(self._updateInternalTemp()) # Start update task without waiting for return
+            self.prevInternalTemp_ms = time.ticks_ms() #type: ignore
+
+        return self.internalTemp
 
     def writeRegister(self, register: int, value: bytes) -> None:
         """Write a value to a specific register of the ADS112 device.

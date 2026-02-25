@@ -25,12 +25,14 @@ class Current(Sensor):
         self.pgaGain = -1  # Default PGA gain for the ADC, can be set later.
         self.csaGain = csaGain  # Gain of the current sense amplifier
 
-    def takeData(self, unit: str = "DEF") -> float:
+    def takeData(self, unit: str = "DEF") -> float | None:
         """Take a reading from the current sensor and add it to the data list."""
         if self.ADC and self.ADC.pgaGain != self.pgaGain:
             self.ADC.setPGA(self.pgaGain)
 
         vReading = self._getVoltageReading()
+        if vReading is None:
+            return None
 
         if unit == "DEF":
             readingUnit = self.units

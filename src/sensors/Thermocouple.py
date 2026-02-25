@@ -36,10 +36,7 @@ class Thermocouple(Sensor):
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
 
         self.type = thermoType
-
-        self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
-
-        self.CJCTemp = 0
+        self.prevTemp = 0
 
         # Temperature to voltage coefficients
 
@@ -102,20 +99,15 @@ class Thermocouple(Sensor):
                    -3.110810E-08)
 
 
-    def takeData(self, unit="DEF") -> float: # Currently returns differential voltage reading. DEF for default.
+    def takeData(self, unit="DEF") -> float | None: # Currently returns differential voltage reading. DEF for default.
         """Take a reading from the thermocouple and add it to the data list."""
         if self.ADC and self.ADC.pgaGain != self.pgaGain:
             self.ADC.setPGA(self.pgaGain)
 
-        # ADC internal temp conversion is slow, so only get it every 1000 ms
-        #current_ms = time.ticks_ms() # type: ignore this is a micropython function
-        #if time.ticks_diff(current_ms, self.prevInternalTemp_ms) > 1000: #type: ignore
-        #    asyncio.create_task(self._updateInternalTemp())
-        #    self.prevInternalTemp_ms = current_ms
-
-        self.CJCTemp = 24
-
-        reading = self._getVoltageReading()
+        vReading = self._getVoltageReading()
+        if vReading is None:
+            return None
+        CJCTemp = self.ADC.getInternalTemp()
 
         if unit == "DEF":
             readingUnit = self.units
@@ -123,19 +115,14 @@ class Thermocouple(Sensor):
             readingUnit = unit
 
         if readingUnit == "V":
-            return reading
+            return vReading
         if readingUnit == "C":
-            CJCVoltage = self._convertTemperatureToVoltage(self.CJCTemp) # Convert C to mV
-            thermocoupleVoltage = reading*1e3 + CJCVoltage
+            CJCVoltage = self._convertTemperatureToVoltage(CJCTemp) # Convert C to mV
+            thermocoupleVoltage = vReading*1e3 + CJCVoltage
             temperature = self._convertVoltageToTemperature(thermocoupleVoltage)# Conversion from mV to C
             return temperature
 
         raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'V' and 'C'.")
-
-
-    async def _updateInternalTemp(self):
-        self.CJCTemp = await self.ADC.getInternalTemp()
-
 
     def _convertTemperatureToVoltage(self, temperature: float) -> float:
         '''
