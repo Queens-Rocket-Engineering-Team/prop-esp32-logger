@@ -1,7 +1,9 @@
 mpremote fs cp .\src\boot.py :/
 mpremote fs cp .\src\main.py :/
 mpremote fs cp .\src\commands.py :/
-mpremote fs cp .\configs\ESPConfig.json :/
+@REM mpremote fs cp .\configs\ESPConfig.json :/
+
+mpremote fs cp .\src\protocol.py :/
 
 mpremote fs cp .\src\ADS112C04.py :/
 

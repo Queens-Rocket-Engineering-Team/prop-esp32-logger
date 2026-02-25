@@ -1,0 +1,113 @@
+{
+    "deviceName": "PANDA-V3",
+    "deviceType": "Sensor Monitor",
+    "i2cBus" : {
+        "sdaPin" : 21,
+        "sclPin" : 22,
+        "frequency_Hz" : 100000
+    },
+
+
+    "sensorInfo": {
+        "thermocouples": {},
+        "pressureTransducers": {
+            "PTCombustionChamber": {
+                "ADCIndex": 3,
+                "pin": 0,
+                "maxPressure_PSI": 1000,
+                "units": "PSI"
+            },
+            "PTN2OSupply": {
+                "ADCIndex": 4,
+                "pin": 0,
+                "maxPressure_PSI": 1000,
+                "units": "PSI"
+            },
+            "PTN2Supply": {
+                "ADCIndex": 4,
+                "pin": 1,
+                "maxPressure_PSI": 200,
+                "units": "PSI"
+            },
+            "PTPreInjector": {
+                "ADCIndex": 4,
+                "pin": 2,
+                "maxPressure_PSI": 1000,
+                "units": "PSI"
+            },
+            "PTRun": {
+                "ADCIndex": 4,
+                "pin": 3,
+                "maxPressure_PSI": 1000,
+                "units": "PSI"
+            }
+        },
+        "loadCells": {
+            "LCFill": {
+                "ADCIndex": 2,
+                "highPin": 1,
+                "lowPin": 0,
+                "loadRating_N": 889.644,
+                "excitation_V": 5,
+                "sensitivity_vV": 36,
+                "units": "kg"
+            },
+            "LCThrust": {
+                "ADCIndex": 3,
+                "highPin": 3,
+                "lowPin": 2,
+                "loadRating_N": 5000,
+                "excitation_V": 5,
+                "sensitivity_vV": 2,
+                "units": "kg"
+            }
+        }
+    },
+    "controls": {
+        "AVFill": {
+            "pin": 38,
+            "defaultState": "CLOSED",
+            "type": "solenoid"
+        },
+        "AVRun": {
+            "pin": 39,
+            "defaultState": "CLOSED",
+            "type": "solenoid"
+        },
+        "AVDump": {
+            "pin": 40,
+            "defaultState": "OPEN",
+            "type": "solenoid"
+        },
+        "AVPurge1": {
+            "pin": 41,
+            "defaultState": "OPEN",
+            "type": "solenoid"
+        },
+        "AVPurge2": {
+            "pin": 42,
+            "defaultState": "OPEN",
+            "type": "solenoid"
+        },
+        "AVVent": {
+            "pin": 43,
+            "defaultState": "OPEN",
+            "type": "solenoid"
+        },
+        "Safe24": {
+            "pin": 4,
+            "defaultState": "OPEN",
+            "type": "relay"
+        },
+        "IgnPrime": {
+            "pin": 6,
+            "defaultState": "OPEN",
+            "type": "relay"
+        },
+        "Ign": {
+            "pin": 5,
+            "defaultState": "OPEN",
+            "type": "relay"
+        }
+    }
+}
