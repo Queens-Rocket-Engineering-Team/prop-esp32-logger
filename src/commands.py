@@ -1,158 +1,70 @@
-import asyncio
-import socket
-import time
+import uasyncio as asyncio  # type: ignore
 
-import ujson
-
-from Control import Control
-from sensors.Current import Current
-from sensors.Resistance import Resistance
-from sensors.LoadCell import LoadCell
-from sensors.PressureTransducer import PressureTransducer
-from sensors.Thermocouple import Thermocouple
+import protocol
 
 
-streamTask: asyncio.Task | None = None  # Task for streaming data from sensors
+streamTask = None
 
-async def gets(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance]) -> str:
-    """Get a single reading from each sensor and return it as a formatted string.
 
-    Data string format is: <acqTime:timestamp>,<sensor1_name>:value,<sensor2_name>:value,...
-
-    """
-
-    dataDict = {}
-
-    acqTime = time.time()  # Get the current time in seconds since the epoch
-    dataDict["acqTime"] = acqTime
-
-    for sensor in sensors.values():
-        data = sensor.takeData()
-        if data is None:
+def readAllSensors(sensor_list):
+    """Read all sensors and return list of (sensor_id, unit_enum, value) tuples."""
+    readings = []
+    for i, sensor in enumerate(sensor_list):
+        value = sensor.takeData()
+        if value is None:
             continue
-        dataDict[sensor.name] = data
+        unit_enum = protocol.UNIT_MAP.get(sensor.units, protocol.UNIT_UNITLESS)
+        readings.append((i, unit_enum, value))
+    return readings
 
-    # Format the data as a string
-    timeString = f"time:{acqTime:.3f}"  # Format the acquisition time to 3 decimal places
 
-    sortedKeys = sorted(dataDict.keys())
-    dataString = " ".join(f"{key}:{dataDict[key]}" for key in sortedKeys if key != "acqTime")
+def executeControl(control_list, command_id, command_state):
+    """Validate command_id, actuate control, return error code."""
+    if command_id < 0 or command_id >= len(control_list):
+        return protocol.ERR_INVALID_ID
 
-    # Combine the time string with the data string
-    payload = f"{timeString} {dataString}"
+    control = control_list[command_id]
 
-    return payload
-
-def strm(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance],
-         sock: socket.socket,
-         args: list[str] | None = None,
-         ) -> None:
-    """Start the asynchronous data streaming job."""
-    if args is None:
-        args = []
-
-    global streamTask  # noqa: PLW0603
-
-    if len(args) == 1:
-        # If a frequency is specified, run sampling at that frequency
-        frequency_hz: float = float(args[0])
-        streamTask = asyncio.create_task(_streamData(sensors, sock, frequency_hz))
-
+    if command_state == protocol.CS_OPEN:
+        control.open()
+    elif command_state == protocol.CS_CLOSED:
+        control.close()
     else:
-        # Otherwise, stream as fast as possible
-        streamTask = asyncio.create_task(_streamData(sensors, sock, None))
+        return protocol.ERR_INVALID_PARAM
 
-def stopStrm() -> str:
-    """Stop the streaming task if it is running."""
+    return protocol.ERR_NONE
+
+
+def executeEstop(control_list):
+    """Set all controls to their default states."""
+    for control in control_list:
+        control.setDefault()
+
+
+def startStream(sensor_list, sock, frequency_hz, state):
+    """Start the async streaming task."""
     global streamTask  # noqa: PLW0603
+    stopStream()
+    streamTask = asyncio.create_task(_streamLoop(sensor_list, sock, frequency_hz, state))
 
+
+def stopStream():
+    """Cancel the streaming task if running."""
+    global streamTask  # noqa: PLW0603
     if streamTask and not streamTask.done():
         streamTask.cancel()
-        print("Streaming task cancelled.")
-        msg = "Streaming task cancelled."
-    else:
-        print("No streaming task to cancel.")
-        msg = "No streaming task to cancel."
-    streamTask = None  # Reset the task reference
-    return msg
+        print("Stream stopped.")
+    streamTask = None
 
-def actuateControl(controls: dict[str, Control], args : list[str]) -> str:
-    """Actuate a control (e.g., open or close a valve) based on the command arguments.
 
-    For relay type controls, closed lets current flow, open stops current flow.
-    """
-
-    if len(args) != 2:
-        return "Invalid number of arguments for control command. Usage: CONTROL <control_name> <open|close>"
-
-    controlName, action = args
-    controlName = controlName.upper()  # All commands normalized to upper case to be case-insensitive
-    # Control lookup
-    try:
-        control = controls[controlName]
-    except KeyError:
-        msg = f"Control '{controlName}' not found. Valid controls are: {', '.join(controls.keys())}."
-        print(msg)
-        return msg
-
-    # Actuate the control based on the action
-    if action.upper() == "OPEN":
-        if control.currentState == "CLOSED":
-            control.open()
-            msg = f"{controlName} opened"
-        else:
-            msg = f"{controlName} already open"
-
-        print(msg)
-        return msg
-
-    # Close the valve if the action is "close"
-    if action.upper() == "CLOSE":
-        if control.currentState == "OPEN":
-            msg = f"{controlName} closed"
-            control.close()
-        else:
-            msg = f"{controlName} already closed"
-            print(msg)
-            return msg
-
-        print(msg)
-        return msg
-
-    return f"Invalid action '{action}' for control '{controlName}'. Use 'OPEN' or 'CLOSE'."
-
-def getStatus(controls: dict[str, Control]) -> str:
-    status = {
-        "device": "ESP32 Sensor",
-        "status": "OK", # FIXME only ever okay lol
-        "controls": {
-        },
-    }
-
-    # Gather status information from each control
-    for name, control in controls.items():
-        status["controls"][name] = control.currentState.upper()
-
-    return ujson.dumps(status)
-
-async def _streamData(sensors: dict[str, LoadCell | Thermocouple | PressureTransducer | Current | Resistance],
-                      sock: socket.socket,
-                      frequency_hz: float | None,
-                     ) -> None:
-    """Asynchronous Helper function to stream data from sensors."""
-
-    print(f"Streaming freq:{frequency_hz}")
-
+async def _streamLoop(sensor_list, sock, frequency_hz, state):
+    """Async loop: read sensors, build DATA packet, send, sleep."""
+    interval = 1.0 / frequency_hz
     try:
         while True:
-            data = "STRM " + await gets(sensors) + "\n" # Attach "STRM" prefix to the data
-            sock.sendall(data.encode("utf-8"))
-
-            # If no frequency is specified, stream as fast as possible
-            if frequency_hz is not None:
-                await asyncio.sleep(1 / frequency_hz)
-
-            # Give a chance to check for cancellation
-            await asyncio.sleep(0)
+            readings = readAllSensors(sensor_list)
+            data = protocol.make_data(state.next_seq(), state.ts_offset, readings)
+            sock.sendall(data)
+            await asyncio.sleep(interval)
     except asyncio.CancelledError:
-        print("Streaming task cancelled.")
+        print("Stream task cancelled.")

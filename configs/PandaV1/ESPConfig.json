@@ -1,6 +1,13 @@
 {
-    "deviceName": "ESP32-01",
+    "deviceName": "PANDA-V1.1",
     "deviceType": "Sensor Monitor",
+    "i2cBus" : {
+        "sdaPin" : 15,
+        "sclPin" : 16,
+        "frequency_Hz" : 100000
+    },
+    "wifiIndicatorPin": 21,
+
     "sensorInfo": {
         "thermocouples": {
             "TCTest": {
@@ -13,34 +20,27 @@
         },
 
         "pressureTransducers": {
-            "PTCombustionChamber": {
+            "PTN2Supply": {
                 "ADCIndex" : 4,
-                "pin" : 0,
-                "maxPressure_PSI" : 1000,
+                "pin" : 1,
+                "maxPressure_PSI" : 200,
                 "units" : "PSI"
             },
             "PTN2OSupply": {
                 "ADCIndex" : 4,
-                "pin" : 1,
-                "maxPressure_PSI" : 1000,
-                "units" : "PSI"
-            },
-            "PTN2Supply": {
-                "ADCIndex" : 2,
-                "pin" : 2,
-                "maxPressure_PSI" : 200,
-                "units" : "PSI"
-            },
-
-            "PTPreInjector": {
-                "ADCIndex" : 2,
-                "pin" : 3,
+                "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
             "PTRun": {
-                "ADCIndex" : 2,
-                "pin" : 0,
+                "ADCIndex" : 4,
+                "pin" : 3,
+                "maxPressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTPreInjector": {
+                "ADCIndex" : 4,
+                "pin" : 2,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             }
@@ -53,16 +53,7 @@
                 "lowPin" : 0,
                 "loadRating_N" : 889.644,
                 "excitation_V" : 5,
-                "sensitivity_vV" : 36,
-                "units" : "kg"
-            },
-            "LCThrust": {
-                "ADCIndex" : 1,
-                "highPin" : 3,
-                "lowPin" : 2,
-                "loadRating_N" : 5000,
-                "excitation_V" : 5,
-                "sensitivity_vV" : 2,
+                "sensitivity_vV" : 20,
                 "units" : "kg"
             }
         },
