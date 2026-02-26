@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 typedef enum {
+    // Return error codes
     PROTOCOL_OK,
     PROTOCOL_ARRAY_LEN_ERR,
     PROTOCOL_NULL_PTR_ERR,
@@ -28,7 +29,46 @@ typedef enum {
     PT_STATUS = 0x12,
     PT_ACK = 0x13,
     PT_NACK = 0x14,
-} protocol_packet_type_t;
+} packet_type_t;
+
+typedef enum {
+    // Packet error codes
+    ERR_NONE = 0x00,
+    ERR_UNKNOWN_TYPE = 0x01,
+    ERR_INVALID_ID = 0x02,
+    ERR_HARDWARE_FAULT = 0x03,
+    ERR_BUSY = 0x04,
+    ERR_NOT_STREAMING = 0x05,
+    ERR_INVALID_PARAM = 0x06,
+} packet_err_t;
+
+// Device status
+#define DS_INACTIVE 0x00
+#define DS_ACTIVE 0x01
+#define DS_ERROR 0x02
+#define DS_CALIBRATING 0x03
+
+// Control state
+#define CS_CLOSED 0x00
+#define CS_OPEN 0x01
+#define CS_ERROR 0xFF
+
+// Data sizes
+#define STATUS_DATA_SIZE 1
+#define STREAM_START_DATA_SIZE 2
+#define CONTROL_DATA_SIZE 2
+#define ACK_DATA_SIZE 3
+#define NACK_DATA_SIZE 3
+#define TIMESYNC_DATA_SIZE 8
+
+#define HEADER_SIZE 9
+
+#define STATUS_PACKET_SIZE (HEADER_SIZE + STATUS_DATA_SIZE)
+#define STREAM_START_PACKET_SIZE (HEADER_SIZE + STREAM_START_DATA_SIZE)
+#define CONTROL_PACKET_SIZE (HEADER_SIZE + CONTROL_DATA_SIZE)
+#define ACK_PACKET_SIZE (HEADER_SIZE + ACK_DATA_SIZE)
+#define NACK_PACKET_SIZE (HEADER_SIZE + NACK_DATA_SIZE)
+#define TIMESYNC_PACKET_SIZE (HEADER_SIZE + TIMESYNC_DATA_SIZE)
 
 typedef struct {
     uint8_t sequence;
@@ -37,7 +77,7 @@ typedef struct {
 
 protocol_err_t make_header_only_packet(uint8_t packet[],
                                        size_t packet_len,
-                                       protocol_packet_type_t packet_type,
+                                       packet_type_t packet_type,
                                        header_only_packet_t header_only);
 
 typedef struct {
@@ -111,7 +151,7 @@ typedef struct {
 } protocol_sensor_data_t;
 
 typedef struct {
-    protocol_sensor_data_t sensor_data[UINT8_MAX];
+    protocol_sensor_data_t *sensor_data;
     uint8_t sensor_count;
     uint8_t sequence;
     uint32_t ts_offset;
@@ -133,7 +173,7 @@ protocol_err_t make_config_packet(uint8_t packet[],
                                   config_packet_t config);
 
 typedef struct {
-    protocol_packet_type_t packet_type;
+    packet_type_t packet_type;
     union {
         config_packet_t config;
         data_packet_t data;
@@ -148,7 +188,7 @@ protocol_err_t server_parse_packet(const uint8_t packet[],
                                    server_payload_t *payload);
 
 typedef struct {
-    protocol_packet_type_t packet_type;
+    packet_type_t packet_type;
     union {
         header_only_packet_t header_only;
         timesync_packet_t timesync;

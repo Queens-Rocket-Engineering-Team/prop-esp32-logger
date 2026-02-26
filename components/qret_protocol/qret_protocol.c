@@ -5,17 +5,6 @@
 
 #define QRET_PROTOCOL_VERSION 0x02
 
-// Device status
-#define DS_INACTIVE 0x00
-#define DS_ACTIVE 0x01
-#define DS_ERROR 0x02
-#define DS_CALIBRATING 0x03
-
-// Control state
-#define CS_CLOSED 0x00
-#define CS_OPEN 0x01
-#define CS_ERROR 0xFF
-
 // Units
 #define UNIT_VOLTS 0x00
 #define UNIT_AMPS 0x01
@@ -60,32 +49,6 @@ static const unit_map_t UNIT_MAP[] = {
 };
 
 static uint8_t _units_to_protocol(const char unit[]);
-
-// Error codes
-#define ERR_NONE 0x00
-#define ERR_UNKNOWN_TYPE 0x01
-#define ERR_INVALID_ID 0x02
-#define ERR_HARDWARE_FAULT 0x03
-#define ERR_BUSY 0x04
-#define ERR_NOT_STREAMING 0x05
-#define ERR_INVALID_PARAM 0x06
-
-// Data sizes
-#define STATUS_DATA_SIZE 1
-#define STREAM_START_DATA_SIZE 2
-#define CONTROL_DATA_SIZE 2
-#define ACK_DATA_SIZE 3
-#define NACK_DATA_SIZE 3
-#define TIMESYNC_DATA_SIZE 8
-
-#define HEADER_SIZE 9
-
-#define STATUS_PACKET_SIZE (HEADER_SIZE + STATUS_DATA_SIZE)
-#define STREAM_START_PACKET_SIZE (HEADER_SIZE + STREAM_START_DATA_SIZE)
-#define CONTROL_PACKET_SIZE (HEADER_SIZE + CONTROL_DATA_SIZE)
-#define ACK_PACKET_SIZE (HEADER_SIZE + ACK_DATA_SIZE)
-#define NACK_PACKET_SIZE (HEADER_SIZE + NACK_DATA_SIZE)
-#define TIMESYNC_PACKET_SIZE (HEADER_SIZE + TIMESYNC_DATA_SIZE)
 
 typedef struct {
     uint8_t protocol_version;
@@ -149,11 +112,11 @@ static protocol_err_t _unpack_header(const uint8_t header[],
     return PROTOCOL_OK;
 }
 
-static bool _is_packet_header_only(protocol_packet_type_t packet_type);
+static bool _is_packet_header_only(packet_type_t packet_type);
 
 protocol_err_t make_header_only_packet(uint8_t packet[],
                                        size_t packet_len,
-                                       protocol_packet_type_t packet_type,
+                                       packet_type_t packet_type,
                                        header_only_packet_t header_only) {
 
     if (packet == NULL) {
@@ -470,8 +433,8 @@ protocol_err_t make_config_packet(uint8_t packet[],
 }
 
 protocol_err_t server_parse_packet(const uint8_t packet[],
-                            size_t packet_len,
-                            server_payload_t *payload) {
+                                   size_t packet_len,
+                                   server_payload_t *payload) {
 
     if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -570,8 +533,8 @@ protocol_err_t server_parse_packet(const uint8_t packet[],
 }
 
 protocol_err_t client_parse_packet(const uint8_t packet[],
-                            size_t packet_len,
-                            client_payload_t *payload) {
+                                   size_t packet_len,
+                                   client_payload_t *payload) {
 
     if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -662,7 +625,7 @@ static uint8_t _units_to_protocol(const char unit[]) {
     return UNIT_UNITLESS;
 }
 
-static bool _is_packet_header_only(protocol_packet_type_t packet_type) {
+static bool _is_packet_header_only(packet_type_t packet_type) {
     switch (packet_type) {
     case PT_ESTOP:
     case PT_DISCOVERY:
