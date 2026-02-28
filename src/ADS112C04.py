@@ -95,6 +95,7 @@ class ADS112C04:
         self.resetDevice()
 
         self.internalTemp = 0
+        self.skipReading = False
         self.updatingInternalTemp = False
         self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
 
@@ -261,6 +262,11 @@ class ADS112C04:
 
         if self.updatingInternalTemp == True:
             return None
+        
+        # next reading after internal temp read must be skipped due to cached temp in buffer
+        if self.skipReading == True:
+            self.skipReading = False
+            return None
 
         # Set the MUX register to select the proper channel if it is not already set
         if self.activePosPin != AIN_Pos or self.activeNegPin != AIN_Neg:
@@ -307,6 +313,7 @@ class ADS112C04:
         """
 
         self.updatingInternalTemp = True
+        self.skipReading = True # next reading after internal temp read must be skipped due to cached temp in buffer
         
         if self.mode != "SINGLE_SHOT": #TODO add single shot mode function
             self.mode = "SINGLE_SHOT"
