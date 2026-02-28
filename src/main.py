@@ -9,7 +9,7 @@ import setup
 import SSDPTools
 import TCPTools
 import wifi_tools as wt
-from boot import CONFIG_FILE, SessionState
+from boot import CONFIG_FILE, WATCHDOG_TIMEOUT_MS, SessionState
 
 def run():
     # -------------------- #
@@ -75,7 +75,9 @@ async def main(sensor_list, control_list, adcs, config_json):
         # Phase 4: Packet processing loop
         try:
             while True:
-                ptype, pseq, pts, payload = await TCPTools.recvPacket(sock)
+                packet = await asyncio.wait_for_ms(TCPTools.recvPacket(sock),
+                                                   WATCHDOG_TIMEOUT_MS)
+                ptype, pseq, pts, payload = packet
 
                 if ptype == protocol.PT_ESTOP:
                     print("ESTOP received!")
@@ -121,7 +123,7 @@ async def main(sensor_list, control_list, adcs, config_json):
                     sock.sendall(protocol.make_nack(
                         state.next_seq(), state.ts_offset, ptype, pseq, protocol.ERR_UNKNOWN_TYPE))
 
-        except (TCPTools.ConnectionClosedError, OSError) as e:
+        except (asyncio.TimeoutError, OSError) as e:
             print(f"Connection lost: {e}")
             try:
                 sock.close()

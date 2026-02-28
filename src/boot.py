@@ -2,6 +2,7 @@ import time
 import protocol
 
 CONFIG_FILE = "ESPConfig.json"
+WATCHDOG_TIMEOUT_MS = 5000
 
 class SessionState:
     def __init__(self):
