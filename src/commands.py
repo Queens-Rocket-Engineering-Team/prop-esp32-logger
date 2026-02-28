@@ -2,17 +2,19 @@ import uasyncio as asyncio  # type: ignore
 
 import protocol
 
-
+from sensors.Thermocouple import Thermocouple
 streamTask = None
 
 
 def readAllSensors(sensor_list):
     """Read all sensors and return list of (sensor_id, unit_enum, value) tuples."""
     readings = []
+
     for i, sensor in enumerate(sensor_list):
         value = sensor.takeData()
         if value is None:
             continue
+        
         unit_enum = protocol.UNIT_MAP.get(sensor.units, protocol.UNIT_UNITLESS)
         readings.append((i, unit_enum, value))
     return readings

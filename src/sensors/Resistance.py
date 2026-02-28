@@ -57,7 +57,6 @@ class Resistance(Sensor):
 
     def _convertVoltageToResistance(self, voltage: float) -> float:
         """Convert the voltage reading to resistance in ohms."""
-        print(voltage)
         rShort = 47.91259768
         resistance = voltage/(self.injectedCurrent*1e-6) - rShort # Subtract ~47 ohms from RC input filter
         return resistance

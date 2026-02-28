@@ -36,7 +36,6 @@ class Thermocouple(Sensor):
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
 
         self.type = thermoType
-        self.prevTemp = 0
 
         # Temperature to voltage coefficients
 

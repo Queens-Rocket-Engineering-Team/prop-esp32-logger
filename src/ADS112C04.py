@@ -96,7 +96,6 @@ class ADS112C04:
 
         self.internalTemp = 0
         self.updatingInternalTemp = False
-        asyncio.create_task(self._updateInternalTemp()) # Update the internal temperature at boot
         self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
 
     def resetDevice(self) -> None:
@@ -197,7 +196,6 @@ class ADS112C04:
         elif AIN_Negative == -1:
             gainSetting = 0b000
             pgaBypass = 0b1  # Single ended measurements always need PGA bypassed
-            print("Attempted to use PGA on single-ended reading, PGA automatically bypassed")
         else:
             gainSetting = GAIN_SETTING[pgaGain]
             pgaBypass = 0b0
@@ -308,15 +306,18 @@ class ADS112C04:
         Reading takes ~50ms, so this should only be called when needed.
         """
 
+        self.updatingInternalTemp = True
+        
+        if self.mode != "SINGLE_SHOT": #TODO add single shot mode function
+            self.mode = "SINGLE_SHOT"
+
         reg1 = self.readRegister(1)[0]
         reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
         reg1 = reg1 & ~0x08 # Set single-shot mode
         self.writeRegister(1, bytes([reg1]))
 
         # Start the temperature sensor conversion
-        startCommand = bytes([0x08])     # START/SYNC command is 0000 1000
-        self._addressDevice(read=False)  # Address the device for writing
-        self.i2c.write(startCommand)     # Send the START/SYNC command
+        self.start()
 
         await asyncio.sleep_ms(75) # type: ignore
 
@@ -431,7 +432,6 @@ class ADS112C04:
             check = self.readRegister(0)
             if check[0] != reg0:
                 raise ValueError("Failed to disable PGA (bypass).")
-            print("PGA bypass enabled (disabled).")
             self.pgaGain = -1  # For calculations, PGA is bypassed (gain=1)
             return
 
@@ -451,7 +451,6 @@ class ADS112C04:
         if check[0] != reg0:
             raise ValueError("Failed to set PGA gain.")
 
-        print(f"Successfully set PGA gain to {gain}.")
         self.pgaGain = gain  # Update the instance variable
 
     def benchmarkReadings(self,

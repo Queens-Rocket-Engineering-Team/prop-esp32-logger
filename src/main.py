@@ -37,14 +37,19 @@ def run():
     config_json = ujson.dumps(config).encode("utf-8")
 
     sensor_list, control_list = setup.setupDeviceFromConfig(config, adcs)
-
+    
     try:
-        asyncio.run(main(sensor_list, control_list, config_json))
+        asyncio.run(main(sensor_list, control_list, adcs, config_json))
     except KeyboardInterrupt:
         print("Stopped.")
 
 
-async def main(sensor_list, control_list, config_json):
+async def main(sensor_list, control_list, adcs, config_json):
+
+    for adc in adcs:
+        adc.updatingInternalTemp = True
+        asyncio.create_task(adc._updateInternalTemp()) # Update the internal temperature at boot
+        adc.prevInternalTemp_ms = time.ticks_ms() #type: ignore
 
     while True:
         # Phase 1: Discover server via SSDP

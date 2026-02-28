@@ -4,7 +4,7 @@
     "i2cBus" : {
         "sdaPin" : 9,
         "sclPin" : 10,
-        "frequency_Hz" : 100000
+        "frequency_Hz" : 400000
     },
 
     "sensorInfo": {
