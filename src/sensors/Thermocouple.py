@@ -118,7 +118,7 @@ class Thermocouple(Sensor):
             return vReading
         if readingUnit == "C":
             CJCVoltage = self._convertTemperatureToVoltage(CJCTemp) # Convert C to mV
-            thermocoupleVoltage = vReading*1e3 + CJCVoltage
+            thermocoupleVoltage = vReading*1e3 + CJCVoltage # vReading in mV
             temperature = self._convertVoltageToTemperature(thermocoupleVoltage)# Conversion from mV to C
             return temperature
 

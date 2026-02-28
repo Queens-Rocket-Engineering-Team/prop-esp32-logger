@@ -49,7 +49,7 @@ UNIT_NEWTONS      = 0x0B
 UNIT_SECONDS      = 0x0C
 UNIT_MILLISECONDS = 0x0D
 UNIT_HERTZ        = 0x0E
-UNIT_PERCENT      = 0x0F
+UNIT_OHMS      = 0x0F
 UNIT_UNITLESS     = 0xFF
 
 UNIT_MAP = {
@@ -68,7 +68,7 @@ UNIT_MAP = {
     "s":    UNIT_SECONDS,
     "ms":   UNIT_MILLISECONDS,
     "Hz":   UNIT_HERTZ,
-    "%":    UNIT_PERCENT,
+    "Ohm":    UNIT_OHMS,
 }
 
 # Error codes

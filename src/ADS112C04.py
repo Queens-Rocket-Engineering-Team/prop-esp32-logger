@@ -307,7 +307,6 @@ class ADS112C04:
         Updates the cached internal temperature for the ADC.
         Reading takes ~50ms, so this should only be called when needed.
         """
-        self.updatingInternalTemp = True
 
         reg1 = self.readRegister(1)[0]
         reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
@@ -352,7 +351,8 @@ class ADS112C04:
 
         if (time.ticks_diff(time.ticks_ms(), self.prevInternalTemp_ms) > 10000 #type: ignore Only update temp after 10 seconds
             and self.updatingInternalTemp == False):
-
+            
+            self.updatingInternalTemp = True
             asyncio.create_task(self._updateInternalTemp()) # Start update task without waiting for return
             self.prevInternalTemp_ms = time.ticks_ms() #type: ignore
 

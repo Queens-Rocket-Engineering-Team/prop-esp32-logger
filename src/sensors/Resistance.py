@@ -20,7 +20,7 @@ class Resistance(Sensor):
             ADC=ADC,
             highPin=pinNumber,
             lowPin=-1,
-            units="Ohms",
+            units="Ohm",
         )
         self.pgaGain = -1 # Single-ended
         self.injectedCurrent = injectedCurrent
@@ -43,14 +43,14 @@ class Resistance(Sensor):
             else:
                 readingUnit = unit
 
-            if readingUnit == "Ohms":
+            if readingUnit == "Ohm":
                 resistance = self._convertVoltageToResistance(vReading)
                 return resistance
 
             if readingUnit == "V":
                 return vReading
 
-            raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'Ohms' and 'V'.")
+            raise ValueError(f"Invalid unit specified: {readingUnit}. Valid units are 'Ohm' and 'V'.")
         finally:
             self.ADC.setCurrentSource(1, self.highPin, 0)
 
