@@ -1,8 +1,6 @@
 # noqa: INP001 -- Implicit namespace doesn't matter here
 from ADS112C04 import ADS112C04  # Importing the ADS112C04 class for external ADCs
 from sensors.Sensor import Sensor  # Importing the base Sensor class
-import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio library
-import time
 from math import exp
 
 
@@ -10,6 +8,67 @@ class Thermocouple(Sensor):
     """
     Class for reading thermocouple data from an ADC.
     """
+
+    # Temperature to voltage coefficients
+
+    cP = (-1.76e-02,
+          3.89e-02,
+          1.86e-05,
+          -9.95e-08,
+          3.18e-10,
+          -5.61e-13,
+          5.61e-16,
+          -3.20e-19,
+          9.72e-23,
+          -1.21e-26)
+        
+    a = (1.185976e-01,
+         -1.183432e-04,
+         1.269686e+02)
+        
+    cN = (0.00e+00,
+          3.95e-02,
+          2.36e-05,
+          -3.29e-07,
+          -4.99e-09,
+          -6.75e-11,
+          -5.74e-13,
+          -3.11e-15,
+          -1.05e-17,
+          -1.99e-20,
+          -1.63e-23)
+        
+    # Voltage to temperature coefficients
+
+    d1 = (0.0000000E+00,
+          2.5173462E+01,
+          -1.1662878E+00,
+          -1.0833638E+00,
+          -8.9773540E-01,
+          -3.7342377E-01,
+          -8.6632643E-02,
+          -1.0450598E-02,
+          -5.1920577E-04)
+        
+    d2 = (0.000000E+00,
+          2.508355E+01,
+          7.860106E-02,
+          -2.503131E-01,
+          8.315270E-02,
+          -1.228034E-02,
+          9.804036E-04,
+          -4.413030E-05,
+          1.057734E-06,
+          -1.052755E-08)
+        
+    d3 = (-1.318058E+02,
+          4.830222E+01,
+          -1.646031E+00,
+          5.464731E-02,
+          -9.650715E-04,
+          8.802193E-06,
+          -3.110810E-08)
+
     ADC: ADS112C04
     def __init__ (self,
                   name: str,
@@ -18,7 +77,7 @@ class Thermocouple(Sensor):
                   highPin: int,
                   lowPin: int,
                   units: str,
-                  thermoType: str,
+                  thermoType: str, # Currently only supports type K
                   ):
 
         super().__init__(
@@ -30,72 +89,12 @@ class Thermocouple(Sensor):
             units=units,
         )
 
-        self.pgaGain = 64  # Default PGA gain for the ADC, can be set later.
+        self.pgaGain = 64  # Gain for thermocouple
 
         if self.units not in ["V", "C"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'V' and 'C'.")
 
         self.type = thermoType
-
-        # Temperature to voltage coefficients
-
-        self.cP = (-1.76e-02,
-                   3.89e-02,
-                   1.86e-05,
-                   -9.95e-08,
-                   3.18e-10,
-                   -5.61e-13,
-                   5.61e-16,
-                   -3.20e-19,
-                   9.72e-23,
-                   -1.21e-26)
-        
-        self.a = (1.185976e-01,
-                  -1.183432e-04,
-                  1.269686e+02)
-        
-        self.cN = (0.00e+00,
-                   3.95e-02,
-                   2.36e-05,
-                   -3.29e-07,
-                   -4.99e-09,
-                   -6.75e-11,
-                   -5.74e-13,
-                   -3.11e-15,
-                   -1.05e-17,
-                   -1.99e-20,
-                   -1.63e-23)
-        
-        # Voltage to temperature coefficients
-
-        self.d1 = (0.0000000E+00,
-                   2.5173462E+01,
-                   -1.1662878E+00,
-                   -1.0833638E+00,
-                   -8.9773540E-01,
-                   -3.7342377E-01,
-                   -8.6632643E-02,
-                   -1.0450598E-02,
-                   -5.1920577E-04)
-        
-        self.d2 = (0.000000E+00,
-                   2.508355E+01,
-                   7.860106E-02,
-                   -2.503131E-01,
-                   8.315270E-02,
-                   -1.228034E-02,
-                   9.804036E-04,
-                   -4.413030E-05,
-                   1.057734E-06,
-                   -1.052755E-08)
-        
-        self.d3 = (-1.318058E+02,
-                   4.830222E+01,
-                   -1.646031E+00,
-                   5.464731E-02,
-                   -9.650715E-04,
-                   8.802193E-06,
-                   -3.110810E-08)
 
 
     def takeData(self, unit="DEF") -> float | None: # Currently returns differential voltage reading. DEF for default.
@@ -136,7 +135,7 @@ class Thermocouple(Sensor):
             voltage += self.a[0] * exp(self.a[1] * (temperature - self.a[2])**2)
             return voltage
         else:
-            voltage = voltage = self._polyEval(temperature, self.cN)
+            voltage = self._polyEval(temperature, self.cN)
             return voltage
     
 
