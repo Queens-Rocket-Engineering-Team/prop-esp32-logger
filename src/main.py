@@ -9,7 +9,7 @@ import setup
 import SSDPTools
 import TCPTools
 import wifi_tools as wt
-from boot import CONFIG_FILE, WATCHDOG_TIMEOUT_MS, SessionState
+from boot import *
 
 def run():
     # -------------------- #
@@ -30,7 +30,7 @@ def run():
     adcs = setup.makeI2CDevices(i2cBus, devices)
     print("I2C devices found at:", [hex(d) for d in devices])
 
-    wlan = wt.connectWifi("QRET", "Mach2@69")
+    wlan = wt.connectWifi(WIFI_SSID, WIFI_PASSWORD)
     if wlan and WIFI_INDICATOR_PIN is not None:
         WIFI_INDICATOR_PIN.on()
 
@@ -125,11 +125,11 @@ async def main(sensor_list, control_list, adcs, config_json):
 
         except (asyncio.TimeoutError, OSError) as e:
             print(f"Connection lost: {e}")
+            commands.stopStream()
             try:
                 sock.close()
             except Exception:
                 pass
-            commands.stopStream()
             await asyncio.sleep(1)
             continue
 

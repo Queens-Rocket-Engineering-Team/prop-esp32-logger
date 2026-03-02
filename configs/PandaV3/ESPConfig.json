@@ -1,53 +1,60 @@
 {
     "deviceName": "PANDA-V3",
     "deviceType": "Sensor Monitor",
-    "i2cBus" : {
-        "sdaPin" : 9,
-        "sclPin" : 10,
-        "frequency_Hz" : 400000
+    "i2cBus": {
+        "sdaPin": 9,
+        "sclPin": 10,
+        "frequency_Hz": 100000
     },
+    "wifiIndicatorPin": 1,
 
     "sensorInfo": {
         "thermocouples": {
-            "TCTest": {
+            "TCRun": {
                 "ADCIndex" : 5,
                 "highPin" : 3,
                 "lowPin" : 2,
+                "type" : "K",
+                "units" : "C"
+            },
+            "TCCombustionChamber": {
+                "ADCIndex" : 5,
+                "highPin" : 1,
+                "lowPin" : 0,
                 "type" : "K",
                 "units" : "C"
             }
         },
 
         "pressureTransducers": {
-            "PTCombustionChamber": {
+            "PTRun": {
                 "ADCIndex" : 4,
                 "pin" : 0,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
-            "PTN2OSupply": {
+            "PTCombustionChamber": {
                 "ADCIndex" : 4,
                 "pin" : 1,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
-            "PTN2Supply": {
+            "PTPreInjector": {
                 "ADCIndex" : 2,
                 "pin" : 2,
-                "maxPressure_PSI" : 200,
+                "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
-
-            "PTPreInjector": {
+            "PTN2OSupply": {
                 "ADCIndex" : 2,
                 "pin" : 3,
                 "maxPressure_PSI" : 1000,
                 "units" : "PSI"
             },
-            "PTRun": {
+            "PTN2Supply": {
                 "ADCIndex" : 2,
                 "pin" : 0,
-                "maxPressure_PSI" : 1000,
+                "maxPressure_PSI" : 200,
                 "units" : "PSI"
             }
         },
@@ -55,17 +62,17 @@
         "loadCells": {
             "LCFill": {
                 "ADCIndex" : 1,
-                "highPin" : 1,
-                "lowPin" : 0,
-                "loadRating_N" : 889.644,
+                "highPin" : 2,
+                "lowPin" : 3,
+                "loadRating_N" : 1962,
                 "excitation_V" : 5,
-                "sensitivity_vV" : 36,
+                "sensitivity_vV" : 2,
                 "units" : "kg"
             },
             "LCThrust": {
                 "ADCIndex" : 1,
-                "highPin" : 3,
-                "lowPin" : 2,
+                "highPin" : 1,
+                "lowPin" : 0,
                 "loadRating_N" : 5000,
                 "excitation_V" : 5,
                 "sensitivity_vV" : 2,
@@ -92,7 +99,7 @@
     },
 
     "controls" : {
-        "AVFill": {
+        "AVN2OFill": {
             "pin" : 38,
             "defaultState" : "CLOSED",
             "type" : "solenoid"
@@ -102,22 +109,22 @@
             "defaultState" : "CLOSED",
             "type" : "solenoid"
         },
-        "AVDump": {
+        "AVVent": {
             "pin" : 40,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
-        "AVPurge1": {
+        "AVN2Fill": {
             "pin" : 41,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
-        "AVPurge2": {
+        "AVPurge": {
             "pin" : 42,
             "defaultState" : "OPEN",
             "type" : "solenoid"
         },
-        "AVVent": {
+        "AVDump": {
             "pin" : 2,
             "defaultState" : "OPEN",
             "type" : "solenoid"
