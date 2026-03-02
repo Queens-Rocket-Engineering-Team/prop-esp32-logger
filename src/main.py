@@ -9,7 +9,9 @@ import setup
 import SSDPTools
 import TCPTools
 import wifi_tools as wt
-from boot import *
+from boot import CONFIG_FILE, WATCHDOG_TIMEOUT_MS
+from boot import WIFI_SSID, WIFI_PASSWORD
+from boot import SessionState
 
 def run():
     # -------------------- #
