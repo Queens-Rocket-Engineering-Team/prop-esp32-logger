@@ -2,7 +2,6 @@ import uasyncio as asyncio  # type: ignore
 
 import protocol
 
-from sensors.Thermocouple import Thermocouple
 streamTask = None
 
 
@@ -47,6 +46,7 @@ def startStream(sensor_list, sock, frequency_hz, state):
     """Start the async streaming task."""
     global streamTask  # noqa: PLW0603
     stopStream()
+    print("Starting stream.")
     streamTask = asyncio.create_task(_streamLoop(sensor_list, sock, frequency_hz, state))
 
 
@@ -70,3 +70,5 @@ async def _streamLoop(sensor_list, sock, frequency_hz, state):
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         print("Stream task cancelled.")
+    except OSError as e:
+        print(f"Stream loop error: {e}")

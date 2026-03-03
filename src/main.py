@@ -2,6 +2,7 @@ import uasyncio as asyncio  # type:ignore
 import ujson  # type:ignore
 from machine import Pin  # type: ignore
 import time
+import gc
 
 import commands
 import protocol
@@ -77,8 +78,13 @@ async def main(sensor_list, control_list, adcs, config_json):
         # Phase 4: Packet processing loop
         try:
             while True:
-                packet = await asyncio.wait_for_ms(TCPTools.recvPacket(sock),
-                                                   WATCHDOG_TIMEOUT_MS)
+                try:
+                    packet = await asyncio.wait_for_ms(TCPTools.recvPacket(sock),
+                                                       WATCHDOG_TIMEOUT_MS)
+                except Exception as e:
+                    print(f'recvPacket exception: {e}')
+                    raise
+
                 ptype, pseq, pts, payload = packet
 
                 if ptype == protocol.PT_ESTOP:
@@ -125,13 +131,17 @@ async def main(sensor_list, control_list, adcs, config_json):
                     sock.sendall(protocol.make_nack(
                         state.next_seq(), state.ts_offset, ptype, pseq, protocol.ERR_UNKNOWN_TYPE))
 
-        except (asyncio.TimeoutError, OSError) as e:
+
+        except Exception as e:
             print(f"Connection lost: {e}")
             commands.stopStream()
             try:
                 sock.close()
             except Exception:
                 pass
+            gc.collect()
+            import micropython # type: ignore
+            micropython.mem_info(1)
             await asyncio.sleep(1)
             continue
 

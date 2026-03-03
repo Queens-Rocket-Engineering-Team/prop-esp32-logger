@@ -311,47 +311,50 @@ class ADS112C04:
         Updates the cached internal temperature for the ADC.
         Reading takes ~50ms, so this should only be called when needed.
         """
+        try:
+            self.updatingInternalTemp = True
+            self.skipReading = True # next reading after internal temp read must be skipped due to cached temp in buffer
+            
+            if self.mode != "SINGLE_SHOT": #TODO add single shot mode function
+                self.mode = "SINGLE_SHOT"
 
-        self.updatingInternalTemp = True
-        self.skipReading = True # next reading after internal temp read must be skipped due to cached temp in buffer
-        
-        if self.mode != "SINGLE_SHOT": #TODO add single shot mode function
-            self.mode = "SINGLE_SHOT"
+            reg1 = self.readRegister(1)[0]
+            reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
+            reg1 = reg1 & ~0x08 # Set single-shot mode
+            self.writeRegister(1, bytes([reg1]))
 
-        reg1 = self.readRegister(1)[0]
-        reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
-        reg1 = reg1 & ~0x08 # Set single-shot mode
-        self.writeRegister(1, bytes([reg1]))
+            # Start the temperature sensor conversion
+            self.start()
 
-        # Start the temperature sensor conversion
-        self.start()
+            await asyncio.sleep_ms(75) # type: ignore
 
-        await asyncio.sleep_ms(75) # type: ignore
+            # Now send the first I2C frame which writes the RDATA command to the device.
+            rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
+            self._addressDevice(read=False)  # Address the device for writing
+            self.i2c.write(rdataCommand)     # Send the RDATA command
 
-        # Now send the first I2C frame which writes the RDATA command to the device.
-        rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
-        self._addressDevice(read=False)  # Address the device for writing
-        self.i2c.write(rdataCommand)     # Send the RDATA command
+            # Now re-address the device for reading and it will return the conversion result.
+            self._addressDevice(read=True)  # Address the device for reading
 
-        # Now re-address the device for reading and it will return the conversion result.
-        self._addressDevice(read=True)  # Address the device for reading
+            # This is a 16-bit result, so the device will return two transmissions. The first is the MSB and the second is
+            # the LSB. We read them separately so that we acknowledge the first byte and then read the second byte.
+            buf = bytearray(2)  # Buffer to hold the read data
+            self.i2c.readinto(buf)  # Read the 2 bytes of data into
+            self.i2c.stop()  # Stop the I2C transmission and pull the
 
-        # This is a 16-bit result, so the device will return two transmissions. The first is the MSB and the second is
-        # the LSB. We read them separately so that we acknowledge the first byte and then read the second byte.
-        buf = bytearray(2)  # Buffer to hold the read data
-        self.i2c.readinto(buf)  # Read the 2 bytes of data into
-        self.i2c.stop()  # Stop the I2C transmission and pull the
+            # String together the bits of the bytearray for debugging. Unused for now.
+            bitString = " ".join(f"0b{byte:08b}" for byte in buf)
+            # print(f"Read from ADS112C04: {bitString}")
 
-        # String together the bits of the bytearray for debugging. Unused for now.
-        bitString = " ".join(f"0b{byte:08b}" for byte in buf)
-        # print(f"Read from ADS112C04: {bitString}")
+            reg1 = reg1 & ~0x01 # Disable temperature sensor
+            self.writeRegister(1, bytes([reg1]))
 
-        reg1 = reg1 & ~0x01 # Disable temperature sensor
-        self.writeRegister(1, bytes([reg1]))
-
-        # Convert the raw ADC bits to temperature (C)
-        self.internalTemp = self._bitsToTemperature(buf[0], buf[1])
-        self.updatingInternalTemp = False
+            # Convert the raw ADC bits to temperature (C)
+            self.internalTemp = self._bitsToTemperature(buf[0], buf[1])
+        except Exception as e:
+            print(f"_updateInternalTemp exception: {e}")
+        finally:
+            self.updatingInternalTemp = False
     
     def getInternalTemp(self) -> float:
         """Get the temperature reading from the internal temperature sensor.
