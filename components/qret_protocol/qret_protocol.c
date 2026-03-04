@@ -21,7 +21,7 @@
 #define UNIT_SECONDS 0x0C
 #define UNIT_MILLISECONDS 0x0D
 #define UNIT_HERTZ 0x0E
-#define UNIT_PERCENT 0x0F
+#define UNIT_OHMS 0x0F
 #define UNIT_UNITLESS 0xFF
 
 typedef struct {
@@ -45,7 +45,7 @@ static const unit_map_t UNIT_MAP[] = {
     {"s",   UNIT_SECONDS     },
     {"ms",  UNIT_MILLISECONDS},
     {"Hz",  UNIT_HERTZ       },
-    {"%",   UNIT_PERCENT     },
+    {"%",   UNIT_OHMS        },
 };
 
 static uint8_t _units_to_protocol(const char unit[]);
