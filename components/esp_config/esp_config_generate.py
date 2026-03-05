@@ -21,7 +21,7 @@ def read_json(file_path: str) -> tuple[dict, str]:
             return json_dict, json_string
     except Exception as e:
         print(f"Failed to read config file: {e}")
-        return None
+        raise
     
 def nest_struct(members: dict, struct_name: str, structs: list, file) -> None:
 
@@ -69,7 +69,7 @@ try:
         header.write('\n')
         header.write('// Auto-generated header from ESPConfig.json\n')
         
-        header.write(f'\nstatic const char json_config[] = u8"{config_str}";\n')
+        header.write(f'\nstatic const char json_config[] = "{config_str}";\n')
 
         #nest_struct(config, 'config', structs, header)
 

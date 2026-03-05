@@ -5,7 +5,7 @@ idf_build_get_property(python PYTHON)
 # Convert JSON config file to header
 set(CONFIG ${CMAKE_SOURCE_DIR}/ESPConfig.json)
 set(CONFIG_HEADER ${CMAKE_CURRENT_BINARY_DIR}/esp_config_json.h)
-set(CONFIG_CONVERT ${CMAKE_CURRENT_SOURCE_DIR}/ESPConfigConvert.py)
+set(CONFIG_CONVERT ${CMAKE_CURRENT_SOURCE_DIR}/esp_config_generate.py)
 
 add_custom_target(generate_config ALL
     COMMAND ${python} ${CONFIG_CONVERT}

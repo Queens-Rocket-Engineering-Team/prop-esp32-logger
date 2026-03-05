@@ -1,4 +1,5 @@
 #include "wifi_tools.h"
+#include "tcp_tools.h"
 #include <esp_err.h>
 #include <esp_event.h>
 #include <esp_log.h>
@@ -38,9 +39,11 @@ static void wifi_event_handler(void *arg,
     if (event_base == WIFI_EVENT) {
         switch (event_id) {
         case WIFI_EVENT_STA_START:
-        case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGV(TAG, "Disconnected from AP");
             esp_wifi_connect();
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED:
+            ESP_LOGD(TAG, "Disconnected from AP");
+            esp_wifi_connect(); //TODO add retry counter
             break;
         case WIFI_EVENT_STA_CONNECTED:
             ESP_LOGI(TAG, "Connected to AP");
@@ -50,6 +53,6 @@ static void wifi_event_handler(void *arg,
     } else if (event_base == IP_EVENT) {
         if (event_id == IP_EVENT_STA_GOT_IP) {
             ESP_LOGI(TAG, "Got IP");
-        }
+        } //TODO handle ip lost event
     }
 }

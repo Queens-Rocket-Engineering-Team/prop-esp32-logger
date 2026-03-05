@@ -1,12 +1,11 @@
-#include "ssdp_tools.h"
+#include "wifi_tools.h"
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_netif.h>
 #include <getnameinfo.h>
 #include <netdb.h>
-#include <stddef.h>
 #include <string.h>
-#include <sys/socket.h>
+
 
 #define SSDP_PORT "1900"
 #define SSDP_IP "239.255.255.250"

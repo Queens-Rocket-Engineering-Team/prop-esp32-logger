@@ -37,7 +37,7 @@ static const unit_map_t UNIT_MAP[] = {
     {"K",   UNIT_KELVIN      },
     {"PSI", UNIT_PSI         },
     {"BAR", UNIT_BAR         },
-    {"PA",  UNIT_PASCAL      },
+    {"Pa",  UNIT_PASCAL      },
     {"g",   UNIT_GRAMS       },
     {"kg",  UNIT_KILOGRAMS   },
     {"lb",  UNIT_POUNDS      },
@@ -45,10 +45,21 @@ static const unit_map_t UNIT_MAP[] = {
     {"s",   UNIT_SECONDS     },
     {"ms",  UNIT_MILLISECONDS},
     {"Hz",  UNIT_HERTZ       },
-    {"%",   UNIT_OHMS        },
+    {"OHM",   UNIT_OHMS        },
 };
 
-static uint8_t _units_to_protocol(const char unit[]);
+static uint8_t _units_to_protocol(const char unit[]) {
+    if (unit == NULL) {
+        return UNIT_UNITLESS;
+    }
+
+    for (size_t i = 0; i < sizeof(UNIT_MAP) / sizeof(UNIT_MAP[0]); i++) {
+        if (strcmp(unit, UNIT_MAP[i].unit) == 0) {
+            return UNIT_MAP[i].code;
+        }
+    }
+    return UNIT_UNITLESS;
+}
 
 typedef struct {
     uint8_t protocol_version;
@@ -610,19 +621,6 @@ protocol_err_t client_parse_packet(const uint8_t packet[],
     }
 
     return PROTOCOL_OK;
-}
-
-static uint8_t _units_to_protocol(const char unit[]) {
-    if (unit == NULL) {
-        return UNIT_UNITLESS;
-    }
-
-    for (size_t i = 0; i < sizeof(UNIT_MAP) / sizeof(UNIT_MAP[0]); i++) {
-        if (strcmp(unit, UNIT_MAP[i].unit) == 0) {
-            return UNIT_MAP[i].code;
-        }
-    }
-    return UNIT_UNITLESS;
 }
 
 static bool _is_packet_header_only(packet_type_t packet_type) {

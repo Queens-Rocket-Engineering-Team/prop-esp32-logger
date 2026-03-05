@@ -18,6 +18,6 @@ typedef struct {
     int sock;
 } app_data_t;
 
-void boot(app_data_t *app_data);
+void setup(app_data_t *app_data);
 
 #endif

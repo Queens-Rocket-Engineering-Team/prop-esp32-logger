@@ -13,7 +13,7 @@ static esp_err_t setup_i2c(i2c_master_bus_handle_t *bus_handle,
                            ADS112C04_t devices[],
                            size_t *num_devices);
 
-void boot(app_data_t *app_data) {
+void setup(app_data_t *app_data) {
     if (!app_data) {
         abort();
     }
@@ -34,7 +34,7 @@ void boot(app_data_t *app_data) {
     wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_config));
 
-    ESP_ERROR_CHECK(wifi_event_handler_register());
+    ESP_ERROR_CHECK(wifi_event_handler_register()); //TODO set this up
 
     wifi_config_t wifi_config = {
         .sta =
