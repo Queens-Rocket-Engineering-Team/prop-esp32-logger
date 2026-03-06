@@ -114,10 +114,15 @@ def make_data(seq, ts_offset, readings):
     return struct.pack(fmt, *args)
 
 
-def make_status(seq, ts_offset, device_status):
-    length = HEADER_SIZE + 1
-    header = pack_header(PT_STATUS, seq, length, get_timestamp(ts_offset))
-    return header + struct.pack(">B", device_status)
+def make_status(seq, ts_offset, device_status, control_states):
+    count  = len(control_states)
+    length = HEADER_SIZE + 2 + 2 * count
+    fmt = ">BBBHI" + "BB" + "BB" * count
+    args = [VERSION, PT_STATUS, seq, length, get_timestamp(ts_offset), device_status, count]
+    for control_id, control_state in control_states:
+        args.append(control_id)
+        args.append(control_state)
+    return struct.pack(fmt, *args)
 
 
 def make_ack(seq, ts_offset, ack_ptype, ack_seq):
@@ -141,7 +146,3 @@ def parse_stream_start(payload):
     frequency_hz = struct.unpack(">H", payload)[0]
     return frequency_hz
 
-
-def parse_timesync(payload):
-    server_time_ms = struct.unpack(">Q", payload)[0]
-    return server_time_ms

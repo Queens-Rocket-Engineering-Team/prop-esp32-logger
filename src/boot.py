@@ -4,8 +4,8 @@ import protocol
 CONFIG_FILE = "ESPConfig.json"
 WATCHDOG_TIMEOUT_MS = 15000
 
-WIFI_SSID = "BELL042"
-WIFI_PASSWORD = "177522FF5F55"
+WIFI_SSID = "propnet"
+WIFI_PASSWORD = "propteambestteam"
 
 class SessionState:
     def __init__(self):

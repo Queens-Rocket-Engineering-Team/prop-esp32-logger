@@ -19,6 +19,21 @@ def readAllSensors(sensor_list):
     return readings
 
 
+def getControlStates(control_list):
+    """Get all control states and return list of (control_id, control_state) tuples."""
+    control_states = []
+
+    for i, control in enumerate(control_list):
+        if control.currentState == "CLOSED":
+            control_state = protocol.CS_CLOSED
+        elif control.currentState == "OPEN":
+            control_state = protocol.CS_OPEN
+        else:
+            control_state = protocol.CS_ERROR
+        control_states.append((i, control_state))
+    return control_states
+
+
 def executeControl(control_list, command_id, command_state):
     """Validate command_id, actuate control, return error code."""
     if command_id < 0 or command_id >= len(control_list):
@@ -70,5 +85,5 @@ async def _streamLoop(sensor_list, sock, frequency_hz, state):
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         print("Stream task cancelled.")
-    except OSError as e:
+    except Exception as e:
         print(f"Stream loop error: {e}")

@@ -106,7 +106,8 @@ async def main(sensor_list, control_list, adcs, config_json):
                         sock.sendall(protocol.make_nack(state.next_seq(), state.ts_offset, ptype, pseq, err))
 
                 elif ptype == protocol.PT_STATUS_REQUEST:
-                    sock.sendall(protocol.make_status(state.next_seq(), state.ts_offset, state.device_status))
+                    control_states = commands.getControlStates(control_list)
+                    sock.sendall(protocol.make_status(state.next_seq(), state.ts_offset, state.device_status, control_states))
 
                 elif ptype == protocol.PT_STREAM_START:
                     freq = protocol.parse_stream_start(payload)
