@@ -27,7 +27,7 @@ class LoadCell(Sensor):
         )
         self.maxWeight = loadRating_N
         self.fullScaleVoltage = excitation_V * (sensitivity_vV / 1000)  # input sensitivity in mV/V
-        self.pgaGain = 8
+        self.pgaGain = 128
 
         if self.units not in ["kg", "N", "V"]:
             raise ValueError(f"Invalid units specified: {self.units}. Valid units are 'kg', 'N', and 'V'.")
