@@ -47,6 +47,7 @@ async def reconnectWifi(ssid: str, password: str, wlan):
     while True:
         try:
             if not wlan.isconnected() and wlan.status() != network.STAT_CONNECTING:
+                wlan.disconnect()
                 wlan.connect(ssid, password)
             await asyncio.sleep(5)
         except Exception as e:
