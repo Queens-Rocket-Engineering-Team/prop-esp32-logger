@@ -42,19 +42,25 @@ def run():
     sensor_list, control_list = setup.setupDeviceFromConfig(config, adcs)
     
     try:
-        asyncio.run(main(sensor_list, control_list, adcs, config_json))
+        asyncio.run(main(sensor_list, control_list, adcs, config_json, wlan))
     except KeyboardInterrupt:
         print("Stopped.")
 
 
-async def main(sensor_list, control_list, adcs, config_json):
+async def main(sensor_list, control_list, adcs, config_json, wlan):
 
     for adc in adcs:
         adc.updatingInternalTemp = True
         asyncio.create_task(adc._updateInternalTemp()) # Update the internal temperature at boot
         adc.prevInternalTemp_ms = time.ticks_ms() #type: ignore
 
+    asyncio.create_task(wt.reconnectWifi(WIFI_SSID, WIFI_PASSWORD, wlan))
+
     while True:
+
+        while not wlan.isconnected():
+            await asyncio.sleep(1)
+
         # Phase 1: Discover server via SSDP
         print("Discovering server...")
         server_ip = await SSDPTools.discoverServer()
