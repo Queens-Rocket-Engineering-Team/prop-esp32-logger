@@ -12,7 +12,7 @@
 
 // void read_sensor_task(void *pvParameters);
 
-const char *TAG = "Main";
+static const char *TAG = "Main";
 
 void app_main(void) {
 
@@ -40,20 +40,8 @@ void app_main(void) {
         &xTaskBufferNetwork
     );
 
-    static StackType_t runStack_tcp_client[8192];
-    static StaticTask_t runTCB_tcp_client;
-
-    // xTaskCreateStaticPinnedToCore(tcp_client_recv_task, "TCP RECV Event
-    // Loop", 8192, NULL,
-    //                               1, runStack_tcp_client, &runTCB_tcp_client,
-    //                               PRO_CPU_NUM);
-
-    // static StackType_t runStack_read_sensor[8192];
-    // static StaticTask_t runTCB_read_sensor;
-
-    // xTaskCreateStaticPinnedToCore(read_sensor_task, "Temp read", 8192,
-    //                               &app_data, 1, runStack_read_sensor,
-    //                               &runTCB_read_sensor, APP_CPU_NUM);
+    
+    
 }
 
 // void read_sensor_task(void *pvParameters) {

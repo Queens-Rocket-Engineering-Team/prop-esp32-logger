@@ -77,7 +77,7 @@ typedef struct {
 
 protocol_err_t make_header_only_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     packet_type_t packet_type,
     header_only_packet_t header_only
 );
@@ -90,7 +90,7 @@ typedef struct {
 
 protocol_err_t make_status_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     status_packet_t status
 );
 
@@ -102,7 +102,7 @@ typedef struct {
 
 protocol_err_t make_stream_start_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     stream_start_packet_t stream_start
 );
 
@@ -115,7 +115,7 @@ typedef struct {
 
 protocol_err_t make_control_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     control_packet_t control
 );
 
@@ -128,7 +128,7 @@ typedef struct {
 
 protocol_err_t make_ack_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     ack_packet_t ack
 );
 
@@ -142,7 +142,7 @@ typedef struct {
 
 protocol_err_t make_nack_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     nack_packet_t nack
 );
 
@@ -154,7 +154,7 @@ typedef struct {
 
 protocol_err_t make_timesync_packet(
     uint8_t packet[],
-    size_t packet_len,
+    size_t *packet_len,
     timesync_packet_t timesync
 );
 
@@ -178,7 +178,7 @@ protocol_err_t make_data_packet(
 );
 
 typedef struct {
-    const char *json_config;
+    char *json_config;
     uint32_t json_config_len;
     uint8_t sequence;
     uint32_t ts_offset;

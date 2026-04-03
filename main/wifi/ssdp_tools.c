@@ -13,18 +13,21 @@
 
 static const char *TAG = "SSDP";
 
-void ssdp_discover_server(void *pvParams) {
-    network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
-    int sock = -1;
+esp_err_t ssdp_discover_server(
+    int32_t *sock,
+    uint32_t *server_ip,
+    esp_netif_t *netif_handle
+) {
 
-    if (network_ctx == NULL || network_ctx->netif_handle == NULL) {
-        goto cleanup;
+    if (sock == NULL || netif_handle == NULL) {
+        return ESP_ERR_INVALID_ARG;
     }
 
-    int err;
+    esp_err_t ret = ESP_FAIL;
+    *sock = -1;
 
     // Creating client's socket
-
+    int32_t err;
     struct addrinfo hints = {0},
                     *res = NULL; // Set up UDP parameters for socket
 
@@ -34,33 +37,37 @@ void ssdp_discover_server(void *pvParams) {
 
     err = getaddrinfo(SSDP_ANY_IP, SSDP_PORT, &hints, &res);
     if (err != 0) {
+        ret = ESP_FAIL;
         goto cleanup;
     }
 
-    sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (sock < 0) {
+    *sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if (*sock < 0) {
         freeaddrinfo(res);
+        ret = ESP_FAIL;
         goto cleanup;
     }
 
     int enable = 1;
-    err = setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable);
+    err = setsockopt(*sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable);
     if (err != 0) {
         freeaddrinfo(res);
+        ret = ESP_FAIL;
         goto cleanup;
     }
 
     // Bind the socket to port 1900, any ip
-    err = bind(sock, res->ai_addr, res->ai_addrlen);
+    err = bind(*sock, res->ai_addr, res->ai_addrlen);
     if (err != 0) {
         freeaddrinfo(res);
+        ret = ESP_FAIL;
         goto cleanup;
     }
     freeaddrinfo(res);
 
     // Add membership to SSDP multicast ip
     esp_netif_ip_info_t ip_info = {0};
-    esp_netif_get_ip_info(network_ctx->netif_handle, &ip_info);
+    esp_netif_get_ip_info(netif_handle, &ip_info);
 
     struct in_addr local_addr;
     inet_addr_from_ip4addr(&local_addr, &ip_info.ip);
@@ -69,10 +76,14 @@ void ssdp_discover_server(void *pvParams) {
     imreq.imr_interface.s_addr = local_addr.s_addr;
     err = inet_pton(AF_INET, SSDP_IP, &imreq.imr_multiaddr.s_addr);
     if (err != 1) {
+        ret = ESP_FAIL;
         goto cleanup;
     }
-    err = setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imreq, sizeof imreq);
+    err = setsockopt(
+        *sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imreq, sizeof imreq
+    );
     if (err != 0) {
+        ret = ESP_FAIL;
         goto cleanup;
     }
 
@@ -84,7 +95,7 @@ void ssdp_discover_server(void *pvParams) {
     while (1) {
         remote_addr_len = sizeof remote_addr;
         ssize_t len = recvfrom(
-            sock,
+            *sock,
             buf,
             sizeof buf - 1,
             0,
@@ -93,6 +104,7 @@ void ssdp_discover_server(void *pvParams) {
         );
 
         if (len < 0) {
+            ret = ESP_FAIL;
             goto cleanup;
         }
 
@@ -107,17 +119,15 @@ void ssdp_discover_server(void *pvParams) {
         }
     }
 
-    network_ctx->server_ip = remote_addr.sin_addr.s_addr;
+    *server_ip = remote_addr.sin_addr.s_addr;
 
-    xTaskNotify(
-        network_ctx->network_manager_handle, SIG_SSDP_GOT_SERVER, eSetBits
-    );
+    ret = ESP_OK;
 
-    cleanup:
-        if (sock != -1) {
-            close(sock);
-        }
+cleanup:
+    if (*sock != -1) {
+        close(*sock);
+    }
+    *sock = -1;
 
-        network_ctx->ssdp_handle = NULL;
-        vTaskDelete(NULL);
+    return ret;
 }

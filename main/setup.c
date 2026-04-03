@@ -63,6 +63,19 @@ void network_setup(network_ctx_t *network_ctx) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start()); // Start wifi driver
+
+    static StaticQueue_t xStaticQueueTCP;
+    static uint8_t ucQueueStorageAreaTCP[TCP_QUEUE_LEN * TCP_QUEUE_ITEM_SIZE];
+
+    network_ctx->tcp_send_queue_handle = xQueueCreateStatic(
+        TCP_QUEUE_LEN,
+        TCP_QUEUE_ITEM_SIZE,
+        ucQueueStorageAreaTCP,
+        &xStaticQueueTCP
+    );
+
+    network_ctx->ssdp_sock = -1;
+    network_ctx->server_sock = -1;
 }
 
 static esp_err_t setup_i2c(

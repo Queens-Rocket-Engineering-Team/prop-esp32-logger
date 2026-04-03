@@ -69,7 +69,7 @@ try:
         header.write('\n')
         header.write('// Auto-generated header from ESPConfig.json\n')
         
-        header.write(f'\nstatic const char json_config[] = "{config_str}";\n')
+        header.write(f'\nstatic char json_config_str[] = "{config_str}";\n')
 
         #nest_struct(config, 'config', structs, header)
 

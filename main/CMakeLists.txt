@@ -6,6 +6,7 @@ idf_component_register(
     esp_driver_i2c
     control
     ADS112C04
+    qret_protocol
     esp_config
     freertos
     esp_wifi

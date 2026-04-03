@@ -1,3 +1,4 @@
+#include "esp_config_json.h"
 #include "wifi_tools.h"
 #include <esp_err.h>
 #include <esp_event.h>
@@ -8,9 +9,11 @@
 #include <sys/socket.h>
 
 #define SSDP_STACK_SIZE 4096
-#define TCP_CONN_STACK_SIZE 4096
+#define TCP_CONN_STACK_SIZE 1024
+#define TCP_RECV_STACK_SIZE 4096
+#define TCP_SEND_STACK_SIZE 16384
 
-static const char TAG[] = "NETWORK MANAGER";
+static const char *TAG = "Network Manager";
 
 void network_state_manager(void *pvParams) {
     if (pvParams == NULL) {
@@ -20,11 +23,31 @@ void network_state_manager(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
     uint32_t signal = SIG_WIFI_DISCONN;
 
-    static StaticTask_t xTaskBufferSSDP;
-    static StackType_t xStackSSDP[SSDP_STACK_SIZE];
+    esp_err_t err;
 
-    static StaticTask_t xTaskBufferTCPCONN;
-    static StackType_t xStackTCPCONN[TCP_CONN_STACK_SIZE];
+    static StaticTask_t xTaskBufferRECV;
+    static StackType_t xStackRECV[TCP_RECV_STACK_SIZE];
+    network_ctx->tcp_recv_handle = xTaskCreateStatic(
+        tcp_client_recv,
+        "Server RECV",
+        TCP_RECV_STACK_SIZE,
+        (void *)network_ctx,
+        3,
+        xStackRECV,
+        &xTaskBufferRECV
+    );
+
+    static StaticTask_t xTaskBufferSEND;
+    static StackType_t xStackSEND[TCP_SEND_STACK_SIZE];
+    network_ctx->tcp_send_handle = xTaskCreateStatic(
+        tcp_client_send,
+        "Server SEND",
+        TCP_SEND_STACK_SIZE,
+        (void *)network_ctx,
+        3,
+        xStackSEND,
+        &xTaskBufferSEND
+    );
 
     while (1) {
         xTaskNotifyWait(0, UINT32_MAX, &signal, portMAX_DELAY);
@@ -32,46 +55,79 @@ void network_state_manager(void *pvParams) {
         if (signal & SIG_WIFI_DISCONN) {
             // reset state manager if wifi disconnects
             signal = SIG_WIFI_DISCONN;
-            if (network_ctx->ssdp_handle != NULL) {
-                vTaskDelete(network_ctx->ssdp_handle);
-                network_ctx->ssdp_handle = NULL;
+            xTaskNotify(
+                network_ctx->tcp_recv_handle,
+                SERVER_DISCONNECTED_BIT,
+                eSetValueWithOverwrite
+            );
+            xTaskNotify(
+                network_ctx->tcp_send_handle,
+                SERVER_DISCONNECTED_BIT,
+                eSetValueWithOverwrite
+            );
+            if (network_ctx->ssdp_sock != -1) {
+                close(network_ctx->ssdp_sock);
+                network_ctx->ssdp_sock = -1;
             }
-            if (network_ctx->tcp_conn_handle != NULL) {
-                vTaskDelete(network_ctx->tcp_conn_handle);
-                network_ctx->tcp_conn_handle = NULL;
+            if (network_ctx->server_sock != -1) {
+                close(network_ctx->server_sock);
+                network_ctx->server_sock = -1;
             }
         }
-        if ((signal & SIG_WIFI_CONN) && network_ctx->ssdp_handle == NULL) {
-            network_ctx->ssdp_handle = xTaskCreateStatic(
-                ssdp_discover_server,
-                "SSDP",
-                SSDP_STACK_SIZE,
-                (void *)network_ctx,
-                1,
-                xStackSSDP,
-                &xTaskBufferSSDP
+        if (signal & SIG_WIFI_CONN) {
+            err = ssdp_discover_server(
+                &network_ctx->ssdp_sock,
+                &network_ctx->server_ip,
+                network_ctx->netif_handle
             );
+            if (err == ESP_OK) {
+                xTaskNotify(
+                    xTaskGetCurrentTaskHandle(), SIG_SSDP_GOT_SERVER, eSetBits
+                );
+            }
         }
-        if ((signal & SIG_SSDP_GOT_SERVER) && network_ctx->tcp_conn_handle == NULL) {
-            network_ctx->tcp_conn_handle = xTaskCreateStatic(
-                tcp_connect_to_server,
-                "TCP conn",
-                TCP_CONN_STACK_SIZE,
-                (void *)network_ctx,
-                1,
-                xStackTCPCONN,
-                &xTaskBufferTCPCONN
+        if (signal & SIG_SSDP_GOT_SERVER) {
+            vTaskDelay(pdMS_TO_TICKS(100));
+            err = tcp_connect_to_server(
+                &network_ctx->server_sock,
+                network_ctx->server_ip,
+                network_ctx->server_port
             );
-
+            if (err == ESP_OK) {
+                xTaskNotify(
+                    xTaskGetCurrentTaskHandle(), SIG_TCP_CONN_SERVER, eSetBits
+                );
+            }
             // debug
             char test[IPADDR_STRLEN_MAX];
             inet_ntop(AF_INET, &network_ctx->server_ip, test, sizeof test);
-            printf("%s\n", test);
+            printf("Server ip: %s\n", test);
             // debug
         }
         if (signal & SIG_TCP_CONN_SERVER) {
-            // xTaskNotify(); for main recieve task
-            ;
+            xTaskNotify(
+                network_ctx->tcp_recv_handle,
+                SERVER_CONNECTED_BIT,
+                eSetValueWithOverwrite
+            );
+            xTaskNotify(
+                network_ctx->tcp_send_handle,
+                SERVER_CONNECTED_BIT,
+                eSetValueWithOverwrite
+            );
+            // take this out later (from testing)
+            server_payload_t payload = {
+                .packet_type = PT_CONFIG,
+                .payload_data = {
+                    .config = {
+                        .json_config = json_config_str,
+                        .json_config_len = sizeof(json_config_str),
+                        0,
+                        0
+                    }
+                }
+            };
+            xQueueSend(network_ctx->tcp_send_queue_handle, (void *)&payload, 0);
         }
     }
 }
@@ -91,7 +147,7 @@ static void wifi_event_handler(
             esp_wifi_connect();
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
-            ESP_LOGD(TAG, "Disconnected from AP");
+            ESP_LOGI(TAG, "Disconnected from AP");
             esp_wifi_connect(); // TODO add retry counter
             break;
         case WIFI_EVENT_STA_CONNECTED:
