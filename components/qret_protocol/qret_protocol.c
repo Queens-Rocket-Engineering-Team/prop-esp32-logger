@@ -45,7 +45,7 @@ static const unit_map_t UNIT_MAP[] = {
     {"s",   UNIT_SECONDS     },
     {"ms",  UNIT_MILLISECONDS},
     {"Hz",  UNIT_HERTZ       },
-    {"OHM",   UNIT_OHMS        },
+    {"OHM", UNIT_OHMS        },
 };
 
 static uint8_t _units_to_protocol(const char unit[]) {
@@ -69,9 +69,11 @@ typedef struct {
     uint32_t timestamp;
 } protocol_header_t;
 
-static protocol_err_t _pack_header(uint8_t header[],
-                                   size_t header_len,
-                                   protocol_header_t header_data) {
+static protocol_err_t _pack_header(
+    uint8_t header[],
+    size_t header_len,
+    protocol_header_t header_data
+) {
 
     if (header == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -95,9 +97,11 @@ static protocol_err_t _pack_header(uint8_t header[],
     return PROTOCOL_OK;
 }
 
-static protocol_err_t _unpack_header(const uint8_t header[],
-                                     size_t header_len,
-                                     protocol_header_t *header_data) {
+static protocol_err_t _unpack_header(
+    const uint8_t header[],
+    size_t header_len,
+    protocol_header_t *header_data
+) {
 
     if (header == NULL || header_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -125,10 +129,12 @@ static protocol_err_t _unpack_header(const uint8_t header[],
 
 static bool _is_packet_header_only(packet_type_t packet_type);
 
-protocol_err_t make_header_only_packet(uint8_t packet[],
-                                       size_t packet_len,
-                                       packet_type_t packet_type,
-                                       header_only_packet_t header_only) {
+protocol_err_t make_header_only_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    packet_type_t packet_type,
+    header_only_packet_t header_only
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -157,9 +163,11 @@ protocol_err_t make_header_only_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_status_packet(uint8_t packet[],
-                                  size_t packet_len,
-                                  status_packet_t status) {
+protocol_err_t make_status_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    status_packet_t status
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -188,9 +196,11 @@ protocol_err_t make_status_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_stream_start_packet(uint8_t packet[],
-                                        size_t packet_len,
-                                        stream_start_packet_t stream_start) {
+protocol_err_t make_stream_start_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    stream_start_packet_t stream_start
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -220,9 +230,11 @@ protocol_err_t make_stream_start_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_control_packet(uint8_t packet[],
-                                   size_t packet_len,
-                                   control_packet_t control) {
+protocol_err_t make_control_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    control_packet_t control
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -252,9 +264,11 @@ protocol_err_t make_control_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_ack_packet(uint8_t packet[],
-                               size_t packet_len,
-                               ack_packet_t ack) {
+protocol_err_t make_ack_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    ack_packet_t ack
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -285,9 +299,11 @@ protocol_err_t make_ack_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_nack_packet(uint8_t packet[],
-                                size_t packet_len,
-                                nack_packet_t nack) {
+protocol_err_t make_nack_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    nack_packet_t nack
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -318,9 +334,11 @@ protocol_err_t make_nack_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_timesync_packet(uint8_t packet[],
-                                    size_t packet_len,
-                                    timesync_packet_t timesync) {
+protocol_err_t make_timesync_packet(
+    uint8_t packet[],
+    size_t packet_len,
+    timesync_packet_t timesync
+) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -356,9 +374,11 @@ protocol_err_t make_timesync_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_data_packet(uint8_t packet[],
-                                size_t *packet_len,
-                                data_packet_t data) {
+protocol_err_t make_data_packet(
+    uint8_t packet[],
+    size_t *packet_len,
+    data_packet_t data
+) {
 
     if (packet == NULL || packet_len == NULL || data.sensor_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -401,9 +421,11 @@ protocol_err_t make_data_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_config_packet(uint8_t packet[],
-                                  size_t *packet_len,
-                                  config_packet_t config) {
+protocol_err_t make_config_packet(
+    uint8_t packet[],
+    size_t *packet_len,
+    config_packet_t config
+) {
 
     if (packet == NULL || packet_len == NULL || config.json_config == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -443,9 +465,11 @@ protocol_err_t make_config_packet(uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t server_parse_packet(const uint8_t packet[],
-                                   size_t packet_len,
-                                   server_payload_t *payload) {
+protocol_err_t server_parse_packet(
+    const uint8_t packet[],
+    size_t packet_len,
+    server_payload_t *payload
+) {
 
     if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -516,8 +540,11 @@ protocol_err_t server_parse_packet(const uint8_t packet[],
                                    (uint32_t)(packet[offset + 3] << 16) |
                                    (uint32_t)(packet[offset + 4] << 8) |
                                    (uint32_t)packet[offset + 5];
-            memcpy(&payload->payload_data.data.sensor_data[i].value,
-                   &value_bytes, sizeof(uint32_t));
+            memcpy(
+                &payload->payload_data.data.sensor_data[i].value,
+                &value_bytes,
+                sizeof(uint32_t)
+            );
         }
         payload->payload_data.data.sequence = header_data.sequence;
         payload->payload_data.data.ts_offset = header_data.timestamp;
@@ -543,9 +570,11 @@ protocol_err_t server_parse_packet(const uint8_t packet[],
     return PROTOCOL_OK;
 }
 
-protocol_err_t client_parse_packet(const uint8_t packet[],
-                                   size_t packet_len,
-                                   client_payload_t *payload) {
+protocol_err_t client_parse_packet(
+    const uint8_t packet[],
+    size_t packet_len,
+    client_payload_t *payload
+) {
 
     if (packet == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;

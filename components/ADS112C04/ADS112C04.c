@@ -13,8 +13,10 @@ static const char *TAG = "ADS112C04";
 // 0xFF terminator
 static const uint8_t valid_pga_gain[] = {1, 2, 4, 8, 16, 32, 64, 128, 0xFF};
 
-esp_err_t ADS112C04_init_i2c(ADS112C04_t *ADS112C04,
-                             i2c_master_bus_handle_t *bus_handle) {
+esp_err_t ADS112C04_init_i2c(
+    ADS112C04_t *ADS112C04,
+    i2c_master_bus_handle_t *bus_handle
+) {
     if (!ADS112C04 || !bus_handle) {
         ESP_LOGE(TAG, "Invalid ARG to init");
         return ESP_ERR_INVALID_ARG;
@@ -28,8 +30,9 @@ esp_err_t ADS112C04_init_i2c(ADS112C04_t *ADS112C04,
 
     // Initialize device and fill dev_handle
     esp_err_t ret;
-    ret = i2c_master_bus_add_device(*bus_handle, &dev_cfg,
-                                    &ADS112C04->_dev_handle);
+    ret = i2c_master_bus_add_device(
+        *bus_handle, &dev_cfg, &ADS112C04->_dev_handle
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Add device to master bus failed");
         return ret;
@@ -49,9 +52,11 @@ esp_err_t ADS112C04_set_address(ADS112C04_t *ADS112C04, uint8_t addr) {
     return ESP_OK;
 }
 
-static esp_err_t _ADS112C04_write_register(ADS112C04_t *ADS112C04,
-                                           uint8_t reg,
-                                           uint8_t write_byte) {
+static esp_err_t _ADS112C04_write_register(
+    ADS112C04_t *ADS112C04,
+    uint8_t reg,
+    uint8_t write_byte
+) {
     // The WREG command is structured like: 0100 rrxx dddd dddd
     // Where rr is the register address and dddd dddd is the data to write.
     // This is sent in two parts: the command - 0100 rrxx, and
@@ -66,8 +71,9 @@ static esp_err_t _ADS112C04_write_register(ADS112C04_t *ADS112C04,
     uint8_t wreg[] = {wreg_cmd, write_byte};
 
     esp_err_t ret;
-    ret = i2c_master_transmit(ADS112C04->_dev_handle, wreg, 2,
-                              ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_transmit(
+        ADS112C04->_dev_handle, wreg, 2, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Transmit wreg cmd failed");
         return ret;
@@ -75,9 +81,11 @@ static esp_err_t _ADS112C04_write_register(ADS112C04_t *ADS112C04,
     return ESP_OK;
 }
 
-static esp_err_t _ADS112C04_read_register(ADS112C04_t *ADS112C04,
-                                          uint8_t reg,
-                                          uint8_t *reg_byte) {
+static esp_err_t _ADS112C04_read_register(
+    ADS112C04_t *ADS112C04,
+    uint8_t reg,
+    uint8_t *reg_byte
+) {
     // The RREG command is structured like: 0010 rrxx
     // The full rreg sequence takes two i2c transactions:
     // 1. Send the rreg command to the device.
@@ -91,14 +99,16 @@ static esp_err_t _ADS112C04_read_register(ADS112C04_t *ADS112C04,
     uint8_t rreg = 0x20 | (reg << 2);
 
     esp_err_t ret;
-    ret = i2c_master_transmit(ADS112C04->_dev_handle, &rreg, 1,
-                              ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_transmit(
+        ADS112C04->_dev_handle, &rreg, 1, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Transmit rreg cmd failed");
         return ret;
     }
-    ret = i2c_master_receive(ADS112C04->_dev_handle, reg_byte, 1,
-                             ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_receive(
+        ADS112C04->_dev_handle, reg_byte, 1, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Recieve registry byte failed");
         return ret;
@@ -114,8 +124,9 @@ static esp_err_t ADS112C04_start_sync(ADS112C04_t *ADS112C04) {
 
     uint8_t start_sync_cmd = 0x08;
     esp_err_t ret;
-    ret = i2c_master_transmit(ADS112C04->_dev_handle, &start_sync_cmd, 1,
-                              ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_transmit(
+        ADS112C04->_dev_handle, &start_sync_cmd, 1, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to send start/sync");
         return ret;
@@ -252,12 +263,14 @@ static float _bits_to_temperature(uint8_t msb, uint8_t lsb) {
     if (raw & 0x2000) {              // If the sign bit is set
         raw -= 1 << 14;              // Convert to negative value
     }
-    float temperature = (float) raw / 0x20; // Divide for temp resolution
+    float temperature = (float)raw / 0x20; // Divide for temp resolution
     return temperature;
 }
 
-esp_err_t ADS112C04_get_internal_temperature(ADS112C04_t *ADS112C04,
-                                             float *temperature) {
+esp_err_t ADS112C04_get_internal_temperature(
+    ADS112C04_t *ADS112C04,
+    float *temperature
+) {
 
     if (!ADS112C04 || !temperature) {
         ESP_LOGE(TAG, "Invalid arg to get_internal_temperature");
@@ -285,21 +298,23 @@ esp_err_t ADS112C04_get_internal_temperature(ADS112C04_t *ADS112C04,
 
     // Read data from ADC
     uint8_t rdata = 0x10;
-    ret = i2c_master_transmit(ADS112C04->_dev_handle, &rdata, 1,
-                              ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_transmit(
+        ADS112C04->_dev_handle, &rdata, 1, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to transmit rdata cmd for temp reading");
         return ret;
     }
     uint8_t reading[2] = {0};
-    ret = i2c_master_receive(ADS112C04->_dev_handle, reading, 2,
-                             ADS112C04_I2C_TIMEOUT);
+    ret = i2c_master_receive(
+        ADS112C04->_dev_handle, reading, 2, ADS112C04_I2C_TIMEOUT
+    );
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to recieve temp reading");
         return ret;
     }
     printf("%d %d\n", reading[0], reading[1]);
-    
+
     // Disable temperature sensor
     reg1 &= ~TEMP_SENSE_MASK;
     ret = _ADS112C04_write_register(ADS112C04, 1, reg1);

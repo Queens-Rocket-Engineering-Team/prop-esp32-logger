@@ -1,20 +1,35 @@
 #include "setup.h"
 #include "ADS112C04.h"
+#include "wifi_tools.h"
 #include <driver/i2c_master.h>
 #include <esp_err.h>
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
-static esp_err_t i2c_master_bus_scan(i2c_master_bus_handle_t bus_handle,
-                                     uint8_t address[],
-                                     size_t address_len);
+static esp_err_t i2c_master_bus_scan(
+    i2c_master_bus_handle_t bus_handle,
+    uint8_t address[],
+    size_t address_len
+);
 
-static esp_err_t setup_i2c(i2c_master_bus_handle_t *bus_handle,
-                           ADS112C04_t devices[],
-                           size_t *num_devices);
+static esp_err_t setup_i2c(
+    i2c_master_bus_handle_t *bus_handle,
+    ADS112C04_t devices[],
+    size_t *num_devices
+);
 
-void setup(app_data_t *app_data) {
-    if (!app_data) {
+void app_setup(app_ctx_t *app_ctx) {
+    if (!app_ctx) {
+        abort();
+    }
+
+    ESP_ERROR_CHECK(
+        setup_i2c(&app_ctx->bus_handle, app_ctx->adcs, &app_ctx->num_adcs)
+    );
+}
+
+void network_setup(network_ctx_t *network_ctx) {
+    if (!network_ctx) {
         abort();
     }
 
@@ -29,32 +44,32 @@ void setup(app_data_t *app_data) {
 
     ESP_ERROR_CHECK(esp_netif_init()); // Initialize NETIF for tcp
     ESP_ERROR_CHECK(esp_event_loop_create_default());
-    app_data->netif_handle = esp_netif_create_default_wifi_sta();
+    network_ctx->netif_handle = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_config));
 
-    ESP_ERROR_CHECK(wifi_event_handler_register()); //TODO set this up
+    ESP_ERROR_CHECK(
+        wifi_event_handler_register(network_ctx)
+    ); // TODO set this up
 
     wifi_config_t wifi_config = {
-        .sta =
-            {
+        .sta = {
                 .ssid = CONFIG_ESP_WIFI_SSID,
                 .password = CONFIG_ESP_WIFI_PASSWORD,
-            },
+                },
     };
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start()); // Start wifi driver
-
-    ESP_ERROR_CHECK(
-        setup_i2c(&app_data->bus_handle, app_data->adcs, &app_data->num_adcs));
 }
 
-static esp_err_t setup_i2c(i2c_master_bus_handle_t *bus_handle,
-                           ADS112C04_t devices[],
-                           size_t *num_devices) {
+static esp_err_t setup_i2c(
+    i2c_master_bus_handle_t *bus_handle,
+    ADS112C04_t devices[],
+    size_t *num_devices
+) {
 
     if (!bus_handle || !devices || !num_devices) {
         return ESP_ERR_INVALID_ARG;
@@ -103,9 +118,11 @@ static esp_err_t setup_i2c(i2c_master_bus_handle_t *bus_handle,
     return ESP_OK;
 }
 
-static esp_err_t i2c_master_bus_scan(i2c_master_bus_handle_t bus_handle,
-                                     uint8_t address[],
-                                     size_t address_len) {
+static esp_err_t i2c_master_bus_scan(
+    i2c_master_bus_handle_t bus_handle,
+    uint8_t address[],
+    size_t address_len
+) {
     if (!address || address_len == 0) {
         return ESP_ERR_INVALID_ARG;
     }

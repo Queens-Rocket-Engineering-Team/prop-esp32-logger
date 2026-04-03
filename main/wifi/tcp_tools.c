@@ -1,44 +1,57 @@
-#include "wifi_tools.h"
 #include "esp_config_json.h"
 #include "setup.h"
+#include "wifi_tools.h"
 #include <esp_err.h>
 #include <string.h>
 #include <sys/socket.h>
 
-esp_err_t tcp_connect_to_server(char server_ip[],
-                                uint16_t server_port,
-                                int *sock) {
+void tcp_connect_to_server(void *pvParams) {
+    network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     int err;
 
     struct sockaddr_in dest_addr = {0};
-    err = inet_pton(AF_INET, server_ip, &dest_addr.sin_addr);
-    if (err != 1) {
-        return ESP_FAIL;
-    }
+    dest_addr.sin_addr.s_addr = network_ctx->server_ip;
     dest_addr.sin_family = AF_INET;
-    dest_addr.sin_port = htons(server_port);
+    dest_addr.sin_port = htons(network_ctx->server_port);
 
     // Creating client's socket
-    *sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    network_ctx->server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     int enable = 1;
-    err = setsockopt(*sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
+    err = setsockopt(
+        network_ctx->server_sock,
+        SOL_SOCKET,
+        SO_REUSEADDR,
+        &enable,
+        sizeof(enable)
+    );
     if (err != 0) {
-        close(*sock);
-        return ESP_FAIL;
+        close(network_ctx->server_sock);
+        goto cleanup;
     }
-    err = connect(*sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+    err = connect(
+        network_ctx->server_sock,
+        (struct sockaddr *)&dest_addr,
+        sizeof(dest_addr)
+    );
     if (err != 0) {
-        close(*sock);
-        return ESP_FAIL;
+        close(network_ctx->server_sock);
+        goto cleanup;
     }
-    return ESP_OK;
-}
 
+    xTaskNotify(
+        network_ctx->network_manager_handle, SIG_TCP_CONN_SERVER, eSetBits
+    );
+
+cleanup:
+    network_ctx->tcp_conn_handle = NULL;
+    vTaskDelete(NULL);
+}
+/*
 void tcp_client_recv_task(void *pvParams) {
 
-    app_data_t *app_data = (app_data_t *)pvParams;
-    char rx_buffer[128];
+    app_ctx_t *app_data = (app_ctx_t *)pvParams;
+    char rx_buffer[1028];
 
     while (true) {
 
@@ -68,9 +81,5 @@ void tcp_client_recv_task(void *pvParams) {
 
 void send_json(int sock) {
 
-
-
     send(sock, json_config, strlen(json_config), 0);
-
-
-}
+}*/

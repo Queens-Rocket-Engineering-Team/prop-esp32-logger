@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "main.c" "setup.c" "wifi/wifi_tools.c" "wifi/tcp_tools.c" "wifi/ssdp_tools.c"
+    SRCS "main.c" "setup.c" "wifi/network_manager.c" "wifi/tcp_tools.c" "wifi/ssdp_tools.c"
     INCLUDE_DIRS . ./wifi
     REQUIRES
     esp_common

@@ -27,10 +27,12 @@ typedef struct {
 esp_err_t set_control(control_t *control, control_state_t state);
 
 // Initialize control pin
-esp_err_t control_init(control_t *control,
-                       gpio_num_t gpio_num,
-                       control_state_t state,
-                       control_active_t active);
+esp_err_t control_init(
+    control_t *control,
+    gpio_num_t gpio_num,
+    control_state_t state,
+    control_active_t active
+);
 
 esp_err_t open_control(control_t *control);
 
