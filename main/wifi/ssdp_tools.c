@@ -2,7 +2,6 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_netif.h>
-#include <getnameinfo.h>
 #include <netdb.h>
 #include <stdint.h>
 #include <string.h>
@@ -26,11 +25,10 @@ esp_err_t ssdp_discover_server(
     esp_err_t ret = ESP_FAIL;
     *sock = -1;
 
-    // Creating client's socket
+    // creating client's socket
     int32_t err;
-    struct addrinfo hints = {0},
-                    *res = NULL; // Set up UDP parameters for socket
-
+    struct addrinfo hints = {0}, *res = NULL;
+    // set up UDP parameters for socket
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_DGRAM;
     hints.ai_protocol = IPPROTO_UDP;
@@ -56,7 +54,7 @@ esp_err_t ssdp_discover_server(
         goto cleanup;
     }
 
-    // Bind the socket to port 1900, any ip
+    // bind the socket to port 1900, any ip
     err = bind(*sock, res->ai_addr, res->ai_addrlen);
     if (err != 0) {
         freeaddrinfo(res);
@@ -65,7 +63,7 @@ esp_err_t ssdp_discover_server(
     }
     freeaddrinfo(res);
 
-    // Add membership to SSDP multicast ip
+    // add membership to SSDP multicast ip
     esp_netif_ip_info_t ip_info = {0};
     esp_netif_get_ip_info(netif_handle, &ip_info);
 
@@ -87,7 +85,7 @@ esp_err_t ssdp_discover_server(
         goto cleanup;
     }
 
-    // Listen for SSDP M-SEARCH from server
+    // listen for SSDP M-SEARCH from server
     struct sockaddr_in remote_addr;
     socklen_t remote_addr_len;
     char buf[1024];
@@ -112,6 +110,7 @@ esp_err_t ssdp_discover_server(
 
         ESP_LOGD(TAG, "%s", buf);
 
+        // check if received data matches server SSDP request
         if (strcasestr(buf, "M-SEARCH * HTTP/1.1") != NULL &&
             strcasestr(buf, "HOST: 239.255.255.250:1900") != NULL &&
             strcasestr(buf, "ST: urn:qretprop:espdevice:1") != NULL) {

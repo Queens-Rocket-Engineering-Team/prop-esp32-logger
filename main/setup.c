@@ -33,7 +33,7 @@ void network_setup(network_ctx_t *network_ctx) {
         abort();
     }
 
-    // Initialize NVS for wifi
+    // initialize NVS for wifi
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
         ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
@@ -42,16 +42,14 @@ void network_setup(network_ctx_t *network_ctx) {
     }
     ESP_ERROR_CHECK(ret);
 
-    ESP_ERROR_CHECK(esp_netif_init()); // Initialize NETIF for tcp
+    ESP_ERROR_CHECK(esp_netif_init()); // initialize NETIF for tcp
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     network_ctx->netif_handle = esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t wifi_init_config = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&wifi_init_config));
 
-    ESP_ERROR_CHECK(
-        wifi_event_handler_register(network_ctx)
-    ); // TODO set this up
+    ESP_ERROR_CHECK(wifi_event_handler_register(network_ctx));
 
     wifi_config_t wifi_config = {
         .sta = {
@@ -62,16 +60,27 @@ void network_setup(network_ctx_t *network_ctx) {
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start()); // Start wifi driver
+    ESP_ERROR_CHECK(esp_wifi_start()); // start wifi driver
 
-    static StaticQueue_t xStaticQueueTCP;
-    static uint8_t ucQueueStorageAreaTCP[TCP_QUEUE_LEN * TCP_QUEUE_ITEM_SIZE];
+    // set up the recv/send message queues
+    static StaticQueue_t xStaticQueueSEND;
+    static uint8_t ucQueueStorageAreaSEND[TCP_QUEUE_LEN * TCP_QUEUE_ITEM_SIZE];
 
     network_ctx->tcp_send_queue_handle = xQueueCreateStatic(
         TCP_QUEUE_LEN,
         TCP_QUEUE_ITEM_SIZE,
-        ucQueueStorageAreaTCP,
-        &xStaticQueueTCP
+        ucQueueStorageAreaSEND,
+        &xStaticQueueSEND
+    );
+
+    static StaticQueue_t xStaticQueueRECV;
+    static uint8_t ucQueueStorageAreaRECV[TCP_QUEUE_LEN * TCP_QUEUE_ITEM_SIZE];
+
+    network_ctx->tcp_recv_queue_handle = xQueueCreateStatic(
+        TCP_QUEUE_LEN,
+        TCP_QUEUE_ITEM_SIZE,
+        ucQueueStorageAreaRECV,
+        &xStaticQueueRECV
     );
 
     network_ctx->ssdp_sock = -1;
@@ -84,36 +93,36 @@ static esp_err_t setup_i2c(
     size_t *num_devices
 ) {
 
-    if (!bus_handle || !devices || !num_devices) {
+    if (bus_handle == NULL || devices == NULL || num_devices == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    // Initialize bus
+    // initialize bus
     i2c_master_bus_config_t i2c_mst_config = {
         .i2c_port = I2C_NUM_0,
         .scl_io_num = SCL_PIN,
         .sda_io_num = SDA_PIN,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = false, // External 1k pullups
+        .flags.enable_internal_pullup = false, // external 1k pullups, dont need
     };
 
     esp_err_t ret;
-    // Initialize i2c master
+    // initialize i2c master
     ret = i2c_new_master_bus(&i2c_mst_config, bus_handle);
     if (ret != ESP_OK) {
         return ret;
     }
 
-    // Address array terminated with 0xFF, 112 possible addresses
+    // address array terminated with 0xFF, 112 possible addresses
     uint8_t device_addr[113];
-    // Scan for all addresses on i2c bus
+    // scan for all addresses on i2c bus
     ret = i2c_master_bus_scan(*bus_handle, device_addr, 113);
     if (ret != ESP_OK) {
         return ret;
     }
 
-    // Set up devices on bus
+    // set up devices on bus
     size_t i;
     for (i = 0; i < MAX_ADCS && device_addr[i] != 0xFF; i++) {
 
@@ -142,12 +151,12 @@ static esp_err_t i2c_master_bus_scan(
 
     size_t addr_index = 0;
     esp_err_t ret;
-    // Non-reserved i2c addresses from 0x08 to 0x78
+    // non-reserved i2c addresses from 0x08 to 0x78
     for (uint8_t addr = 0x08; addr < 0x78; addr++) {
         ret = i2c_master_probe(bus_handle, addr, 100);
 
         if (ret == ESP_OK) {
-            if (addr_index < address_len - 1) { // Leave space for terminator
+            if (addr_index < address_len - 1) { // leave space for terminator
                 address[addr_index++] = addr;
             } else {
                 address[addr_index] = 0xFF;

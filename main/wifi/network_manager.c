@@ -8,9 +8,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 
-#define SSDP_STACK_SIZE 4096
-#define TCP_CONN_STACK_SIZE 1024
-#define TCP_RECV_STACK_SIZE 4096
+#define TCP_RECV_STACK_SIZE 8192
 #define TCP_SEND_STACK_SIZE 16384
 
 static const char *TAG = "Network Manager";
@@ -25,8 +23,11 @@ void network_state_manager(void *pvParams) {
 
     esp_err_t err;
 
+    // create the recv/send tasks on network startup
+
     static StaticTask_t xTaskBufferRECV;
     static StackType_t xStackRECV[TCP_RECV_STACK_SIZE];
+
     network_ctx->tcp_recv_handle = xTaskCreateStatic(
         tcp_client_recv,
         "Server RECV",
@@ -39,6 +40,7 @@ void network_state_manager(void *pvParams) {
 
     static StaticTask_t xTaskBufferSEND;
     static StackType_t xStackSEND[TCP_SEND_STACK_SIZE];
+
     network_ctx->tcp_send_handle = xTaskCreateStatic(
         tcp_client_send,
         "Server SEND",
@@ -57,12 +59,12 @@ void network_state_manager(void *pvParams) {
             signal = SIG_WIFI_DISCONN;
             xTaskNotify(
                 network_ctx->tcp_recv_handle,
-                SERVER_DISCONNECTED_BIT,
+                SERVER_DISCONNECTED,
                 eSetValueWithOverwrite
             );
             xTaskNotify(
                 network_ctx->tcp_send_handle,
-                SERVER_DISCONNECTED_BIT,
+                SERVER_DISCONNECTED,
                 eSetValueWithOverwrite
             );
             if (network_ctx->ssdp_sock != -1) {
@@ -75,6 +77,7 @@ void network_state_manager(void *pvParams) {
             }
         }
         if (signal & SIG_WIFI_CONN) {
+            // look for server when wifi connects
             err = ssdp_discover_server(
                 &network_ctx->ssdp_sock,
                 &network_ctx->server_ip,
@@ -87,7 +90,7 @@ void network_state_manager(void *pvParams) {
             }
         }
         if (signal & SIG_SSDP_GOT_SERVER) {
-            vTaskDelay(pdMS_TO_TICKS(100));
+            // attempt to connect to server when ip found
             err = tcp_connect_to_server(
                 &network_ctx->server_sock,
                 network_ctx->server_ip,
@@ -98,24 +101,21 @@ void network_state_manager(void *pvParams) {
                     xTaskGetCurrentTaskHandle(), SIG_TCP_CONN_SERVER, eSetBits
                 );
             }
-            // debug
-            char test[IPADDR_STRLEN_MAX];
-            inet_ntop(AF_INET, &network_ctx->server_ip, test, sizeof test);
-            printf("Server ip: %s\n", test);
-            // debug
         }
         if (signal & SIG_TCP_CONN_SERVER) {
+            // enable the recv/send tasks when connected to server
             xTaskNotify(
                 network_ctx->tcp_recv_handle,
-                SERVER_CONNECTED_BIT,
+                SERVER_CONNECTED,
                 eSetValueWithOverwrite
             );
             xTaskNotify(
                 network_ctx->tcp_send_handle,
-                SERVER_CONNECTED_BIT,
+                SERVER_CONNECTED,
                 eSetValueWithOverwrite
             );
-            // take this out later (from testing)
+
+            // TODO take this out later, should be in main but lazy
             server_payload_t payload = {
                 .packet_type = PT_CONFIG,
                 .payload_data = {

@@ -5,7 +5,7 @@
 
 #define QRET_PROTOCOL_VERSION 0x02
 
-// Units
+// units
 #define UNIT_VOLTS 0x00
 #define UNIT_AMPS 0x01
 #define UNIT_CELSIUS 0x02
@@ -23,43 +23,6 @@
 #define UNIT_HERTZ 0x0E
 #define UNIT_OHMS 0x0F
 #define UNIT_UNITLESS 0xFF
-
-typedef struct {
-    const char *unit;
-    uint8_t code;
-} unit_map_t;
-
-static const unit_map_t UNIT_MAP[] = {
-    {"V",   UNIT_VOLTS       },
-    {"A",   UNIT_AMPS        },
-    {"C",   UNIT_CELSIUS     },
-    {"F",   UNIT_FAHRENHEIT  },
-    {"K",   UNIT_KELVIN      },
-    {"PSI", UNIT_PSI         },
-    {"BAR", UNIT_BAR         },
-    {"Pa",  UNIT_PASCAL      },
-    {"g",   UNIT_GRAMS       },
-    {"kg",  UNIT_KILOGRAMS   },
-    {"lb",  UNIT_POUNDS      },
-    {"N",   UNIT_NEWTONS     },
-    {"s",   UNIT_SECONDS     },
-    {"ms",  UNIT_MILLISECONDS},
-    {"Hz",  UNIT_HERTZ       },
-    {"OHM", UNIT_OHMS        },
-};
-
-static uint8_t _units_to_protocol(const char unit[]) {
-    if (unit == NULL) {
-        return UNIT_UNITLESS;
-    }
-
-    for (size_t i = 0; i < sizeof(UNIT_MAP) / sizeof(UNIT_MAP[0]); i++) {
-        if (strcmp(unit, UNIT_MAP[i].unit) == 0) {
-            return UNIT_MAP[i].code;
-        }
-    }
-    return UNIT_UNITLESS;
-}
 
 typedef struct {
     uint8_t protocol_version;
@@ -127,7 +90,20 @@ static protocol_err_t _unpack_header(
     return PROTOCOL_OK;
 }
 
-static bool _is_packet_header_only(packet_type_t packet_type);
+static bool _is_packet_header_only(packet_type_t packet_type) {
+    switch (packet_type) {
+    case PT_ESTOP:
+    case PT_DISCOVERY:
+    case PT_TIMESYNC:
+    case PT_STREAM_STOP:
+    case PT_GET_SINGLE:
+    case PT_HEARTBEAT:
+    case PT_STATUS_REQUEST:
+        return true;
+    default:
+        return false;
+    }
+}
 
 protocol_err_t make_header_only_packet(
     uint8_t packet[],
@@ -277,7 +253,7 @@ protocol_err_t make_ack_packet(
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
-    if (*packet_len != ACK_PACKET_SIZE) {
+    if (*packet_len < ACK_PACKET_SIZE) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
     *packet_len = ACK_PACKET_SIZE;
@@ -336,47 +312,6 @@ protocol_err_t make_nack_packet(
     packet[HEADER_SIZE + 0] = nack.nack_packet_type;
     packet[HEADER_SIZE + 1] = nack.nack_sequence;
     packet[HEADER_SIZE + 2] = nack.nack_error_code;
-
-    return PROTOCOL_OK;
-}
-
-protocol_err_t make_timesync_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    timesync_packet_t timesync
-) {
-
-    if (packet == NULL) {
-        return PROTOCOL_NULL_PTR_ERR;
-    }
-    if (*packet_len < TIMESYNC_PACKET_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
-    }
-    *packet_len = TIMESYNC_PACKET_SIZE;
-
-    protocol_err_t err;
-
-    protocol_header_t header_data = {
-        .protocol_version = QRET_PROTOCOL_VERSION,
-        .packet_type = PT_TIMESYNC,
-        .sequence = timesync.sequence,
-        .data_length = TIMESYNC_PACKET_SIZE,
-        .timestamp = timesync.ts_offset,
-    };
-
-    err = _pack_header(packet, HEADER_SIZE, header_data);
-    if (err != PROTOCOL_OK) {
-        return err;
-    }
-
-    packet[HEADER_SIZE + 0] = (uint8_t)(timesync.server_time_ms >> 56);
-    packet[HEADER_SIZE + 1] = (uint8_t)(timesync.server_time_ms >> 48);
-    packet[HEADER_SIZE + 2] = (uint8_t)(timesync.server_time_ms >> 40);
-    packet[HEADER_SIZE + 3] = (uint8_t)(timesync.server_time_ms >> 32);
-    packet[HEADER_SIZE + 4] = (uint8_t)(timesync.server_time_ms >> 24);
-    packet[HEADER_SIZE + 5] = (uint8_t)(timesync.server_time_ms >> 16);
-    packet[HEADER_SIZE + 6] = (uint8_t)(timesync.server_time_ms >> 8);
-    packet[HEADER_SIZE + 7] = (uint8_t)timesync.server_time_ms;
 
     return PROTOCOL_OK;
 }
@@ -472,6 +407,31 @@ protocol_err_t make_config_packet(
     return PROTOCOL_OK;
 }
 
+protocol_err_t get_packet_len(
+    const uint8_t header[],
+    size_t header_len,
+    uint16_t *data_len
+) {
+
+    if (header == NULL || data_len == NULL) {
+        return PROTOCOL_NULL_PTR_ERR;
+    }
+    if (header_len < HEADER_SIZE) {
+        return PROTOCOL_ARRAY_LEN_ERR;
+    }
+
+    protocol_err_t err;
+    protocol_header_t header_data = {0};
+
+    err = _unpack_header(header, header_len, &header_data);
+    if (err != PROTOCOL_OK) {
+        return err;
+    }
+
+    *data_len = header_data.data_length;
+    return PROTOCOL_OK;
+}
+
 protocol_err_t server_parse_packet(
     const uint8_t buffer[],
     size_t buffer_len,
@@ -492,7 +452,7 @@ protocol_err_t server_parse_packet(
     if (err != PROTOCOL_OK) {
         return err;
     }
-    if (buffer_len != header_data.data_length) {
+    if (buffer_len < header_data.data_length) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
 
@@ -597,7 +557,7 @@ protocol_err_t client_parse_packet(
     if (err != PROTOCOL_OK) {
         return err;
     }
-    if (buffer_len != header_data.data_length) {
+    if (buffer_len < header_data.data_length) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
 
@@ -607,6 +567,7 @@ protocol_err_t client_parse_packet(
     switch (header_data.packet_type) {
     case PT_ESTOP:
     case PT_DISCOVERY:
+    case PT_TIMESYNC:
     case PT_STREAM_STOP:
     case PT_GET_SINGLE:
     case PT_HEARTBEAT:
@@ -636,39 +597,31 @@ protocol_err_t client_parse_packet(
         payload->payload_data.control.sequence = header_data.sequence;
         payload->payload_data.control.ts_offset = header_data.timestamp;
         break;
-    case PT_TIMESYNC:
-        if (header_data.data_length != TIMESYNC_PACKET_SIZE) {
+    case PT_ACK:
+        if (header_data.data_length != ACK_PACKET_SIZE) {
             return PROTOCOL_ARRAY_LEN_ERR;
         }
-        payload->payload_data.timesync
-            .server_time_ms = ((uint64_t)buffer[HEADER_SIZE + 0] << 56) |
-                              ((uint64_t)buffer[HEADER_SIZE + 1] << 48) |
-                              ((uint64_t)buffer[HEADER_SIZE + 2] << 40) |
-                              ((uint64_t)buffer[HEADER_SIZE + 3] << 32) |
-                              ((uint64_t)buffer[HEADER_SIZE + 4] << 24) |
-                              ((uint64_t)buffer[HEADER_SIZE + 5] << 16) |
-                              ((uint64_t)buffer[HEADER_SIZE + 6] << 8) |
-                              (uint64_t)buffer[HEADER_SIZE + 7];
-        payload->payload_data.timesync.sequence = header_data.sequence;
-        payload->payload_data.timesync.ts_offset = header_data.timestamp;
+        if (buffer[HEADER_SIZE + 2] != ERR_NONE) {
+            return PROTOCOL_INVALID_PACKET_TYPE;
+        }
+        payload->payload_data.ack.ack_packet_type = buffer[HEADER_SIZE + 0];
+        payload->payload_data.ack.ack_sequence = buffer[HEADER_SIZE + 1];
+        payload->payload_data.ack.sequence = header_data.sequence;
+        payload->payload_data.ack.ts_offset = header_data.timestamp;
+        break;
+    case PT_NACK:
+        if (header_data.data_length != NACK_PACKET_SIZE) {
+            return PROTOCOL_ARRAY_LEN_ERR;
+        }
+        payload->payload_data.nack.nack_packet_type = buffer[HEADER_SIZE + 0];
+        payload->payload_data.nack.nack_sequence = buffer[HEADER_SIZE + 1];
+        payload->payload_data.nack.nack_error_code = buffer[HEADER_SIZE + 2];
+        payload->payload_data.nack.sequence = header_data.sequence;
+        payload->payload_data.nack.ts_offset = header_data.timestamp;
         break;
     default:
         return PROTOCOL_INVALID_PACKET_TYPE;
     }
 
     return PROTOCOL_OK;
-}
-
-static bool _is_packet_header_only(packet_type_t packet_type) {
-    switch (packet_type) {
-    case PT_ESTOP:
-    case PT_DISCOVERY:
-    case PT_STREAM_STOP:
-    case PT_GET_SINGLE:
-    case PT_HEARTBEAT:
-    case PT_STATUS_REQUEST:
-        return true;
-    default:
-        return false;
-    }
 }

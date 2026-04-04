@@ -7,7 +7,7 @@
 #include <string.h>
 #include <sys/socket.h>
 
-#define RX_BUFFER_LEN 1024
+#define RX_BUFFER_LEN 2048
 #define TX_BUFFER_LEN 8192
 
 static const char *TAG = "TCP";
@@ -32,7 +32,7 @@ esp_err_t tcp_connect_to_server(
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(server_port);
 
-    // Creating client's socket
+    // creating client's socket
     *sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if (*sock < 0) {
         ret = ESP_FAIL;
@@ -47,6 +47,7 @@ esp_err_t tcp_connect_to_server(
         goto cleanup;
     }
 
+    // attempt to connect to the server
     err = connect(*sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
     if (err != 0) {
         ESP_LOGE(TAG, "connect failed: errno %d", errno);
@@ -68,25 +69,29 @@ void tcp_client_recv(void *pvParams) {
     }
 
     static uint8_t rx_buffer[RX_BUFFER_LEN] = {0};
+    static uint16_t packet_data_len = 0;
     static client_payload_t payload = {0};
 
     uint32_t server_connected;
     xTaskNotify(
-        xTaskGetCurrentTaskHandle(),
-        SERVER_DISCONNECTED_BIT,
-        eSetValueWithOverwrite
+        xTaskGetCurrentTaskHandle(), SERVER_DISCONNECTED, eSetValueWithOverwrite
     );
 
     while (1) {
+        // only pause when server is disconnected
+        xTaskNotifyWait(
+            0,
+            0,
+            &server_connected,
+            (server_connected == SERVER_CONNECTED) ? 0 : portMAX_DELAY
+        );
 
-        xTaskNotifyWait(0, 0, &server_connected, portMAX_DELAY);
+        if (server_connected == SERVER_CONNECTED) {
 
-        if (server_connected == SERVER_CONNECTED_BIT) {
-
+            // get the full header from a packet
             int32_t len = recv(
-                network_ctx->server_sock, rx_buffer, sizeof(rx_buffer) - 1, 0
+                network_ctx->server_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL
             );
-
             if (len < 0) {
                 ESP_LOGE(TAG, "recv failed: errno %d", errno);
                 switch (errno) {
@@ -102,35 +107,46 @@ void tcp_client_recv(void *pvParams) {
                 continue;
             }
 
-            // null-terminate received data and treat like a string
-            rx_buffer[len] = 0;
-            ESP_LOGI(TAG, "Received %d bytes from server:", len);
-            ESP_LOGI(TAG, "%s", rx_buffer);
+            get_packet_len(rx_buffer, HEADER_SIZE, &packet_data_len);
 
-            client_parse_packet(rx_buffer, sizeof(rx_buffer), &payload);
-
-            switch (payload.packet_type) {
-            case PT_ESTOP:
-                break;
-            case PT_DISCOVERY:
-                break;
-            case PT_TIMESYNC:
-                break;
-            case PT_CONTROL:
-                break;
-            case PT_STATUS_REQUEST:
-                break;
-            case PT_STREAM_START:
-                break;
-            case PT_STREAM_STOP:
-                break;
-            case PT_GET_SINGLE:
-                break;
-            case PT_HEARTBEAT:
-                break;
-            default:
-                ESP_LOGE(TAG, "Invalid client packet type recieved");
+            if (packet_data_len > 0) {
+                if (sizeof(rx_buffer) - HEADER_SIZE < packet_data_len) {
+                    ESP_LOGE(
+                        TAG,
+                        "rx_buffer ran out of space: packet len %d",
+                        packet_data_len
+                    );
+                    break;
+                }
+                // recieve the rest of the packet if not header only
+                len = recv(
+                    network_ctx->server_sock,
+                    rx_buffer + HEADER_SIZE,
+                    packet_data_len,
+                    MSG_WAITALL
+                );
+                if (len < 0) {
+                    ESP_LOGE(TAG, "recv failed: errno %d", errno);
+                    switch (errno) {
+                    case ECONNRESET:
+                    case EBADF:
+                        continue;
+                    default:
+                        goto cleanup;
+                    }
+                }
+                if (len == 0) {
+                    ESP_LOGI(TAG, "Connection closed by server gracefully");
+                    continue;
+                }
             }
+
+            ESP_LOGD(TAG, "Received %d bytes from server:", len);
+            ESP_LOG_BUFFER_HEXDUMP(TAG, rx_buffer, len, ESP_LOG_DEBUG);
+
+            // parse and send packet data for processing
+            client_parse_packet(rx_buffer, sizeof(rx_buffer), &payload);
+            xQueueSend(network_ctx->tcp_recv_queue_handle, (void *)&payload, 0);
         }
     }
 
@@ -139,9 +155,9 @@ void tcp_client_recv(void *pvParams) {
     }
 
 cleanup:
-    shutdown(network_ctx->server_sock, 0); // fix this to alert other tasks
+    shutdown(network_ctx->server_sock, 0);
     close(network_ctx->server_sock);
-    // delete task here
+    // vTaskDelete(NULL);
 }
 
 void tcp_client_send(void *pvParams) {
@@ -156,23 +172,31 @@ void tcp_client_send(void *pvParams) {
 
     uint32_t server_connected;
     xTaskNotify(
-        xTaskGetCurrentTaskHandle(),
-        SERVER_DISCONNECTED_BIT,
-        eSetValueWithOverwrite
+        xTaskGetCurrentTaskHandle(), SERVER_DISCONNECTED, eSetValueWithOverwrite
     );
 
     while (1) {
+        // only pause when server is disconnected
+        xTaskNotifyWait(
+            0,
+            0,
+            &server_connected,
+            (server_connected == SERVER_CONNECTED) ? 0 : portMAX_DELAY
+        );
 
-        xTaskNotifyWait(0, 0, &server_connected, portMAX_DELAY);
-
-        if (server_connected == SERVER_CONNECTED_BIT) {
-
-            xQueueReceive(
-                network_ctx->tcp_send_queue_handle, &payload, portMAX_DELAY
-            );
+        if (server_connected == SERVER_CONNECTED) {
+            // timeout after 100ms to check if server is still alive
+            if (xQueueReceive(
+                    network_ctx->tcp_send_queue_handle,
+                    &payload,
+                    pdMS_TO_TICKS(100)
+                ) == pdFALSE) {
+                continue;
+            }
 
             size_t packet_len = sizeof(tx_buffer);
 
+            // convert packet struct to bytes depending on type
             switch (payload.packet_type) {
             case PT_CONFIG:
                 make_config_packet(
@@ -201,12 +225,12 @@ void tcp_client_send(void *pvParams) {
                 break;
             default:
                 ESP_LOGE(TAG, "Attempted to send invalid server packet");
+                continue;
             }
 
             int32_t len_sent = send(
                 network_ctx->server_sock, tx_buffer, packet_len, 0
             );
-
             if (len_sent < 0) {
                 ESP_LOGE(TAG, "send failed: errno %d", errno);
                 switch (errno) {
@@ -217,6 +241,7 @@ void tcp_client_send(void *pvParams) {
                     goto cleanup;
                 }
             }
+            ESP_LOGI(TAG, "Outgoing packet len: %d", len_sent);
         }
     }
 

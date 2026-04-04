@@ -10,6 +10,7 @@ idf_component_register(
     esp_config
     freertos
     esp_wifi
+    esp_timer
     nvs_flash
     esp_event
 )

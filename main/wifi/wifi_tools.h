@@ -13,6 +13,7 @@ typedef struct {
     uint16_t server_port;
     int32_t server_sock;
     int32_t ssdp_sock;
+    QueueHandle_t tcp_recv_queue_handle;
     QueueHandle_t tcp_send_queue_handle;
     TaskHandle_t network_manager_handle;
     TaskHandle_t tcp_recv_handle;
@@ -28,10 +29,11 @@ enum {
 };
 
 enum {
-    SERVER_CONNECTED_BIT = 0,
-    SERVER_DISCONNECTED_BIT
+    SERVER_CONNECTED = 0,
+    SERVER_DISCONNECTED
 };
 
+#define TCP_SERVER_PORT 50000
 #define TCP_QUEUE_LEN 10
 #define TCP_QUEUE_ITEM_SIZE sizeof(server_payload_t)
 

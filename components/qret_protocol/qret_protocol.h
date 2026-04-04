@@ -27,6 +27,7 @@ typedef enum {
     PT_CONFIG = 0x10,
     PT_DATA = 0x11,
     PT_STATUS = 0x12,
+    // All
     PT_ACK = 0x13,
     PT_NACK = 0x14,
 } packet_type_t;
@@ -59,7 +60,6 @@ typedef enum {
 #define CONTROL_DATA_SIZE 2
 #define ACK_DATA_SIZE 3
 #define NACK_DATA_SIZE 3
-#define TIMESYNC_DATA_SIZE 8
 
 #define HEADER_SIZE 9
 
@@ -68,7 +68,6 @@ typedef enum {
 #define CONTROL_PACKET_SIZE (HEADER_SIZE + CONTROL_DATA_SIZE)
 #define ACK_PACKET_SIZE (HEADER_SIZE + ACK_DATA_SIZE)
 #define NACK_PACKET_SIZE (HEADER_SIZE + NACK_DATA_SIZE)
-#define TIMESYNC_PACKET_SIZE (HEADER_SIZE + TIMESYNC_DATA_SIZE)
 
 typedef struct {
     uint8_t sequence;
@@ -147,18 +146,6 @@ protocol_err_t make_nack_packet(
 );
 
 typedef struct {
-    uint64_t server_time_ms;
-    uint8_t sequence;
-    uint32_t ts_offset;
-} timesync_packet_t;
-
-protocol_err_t make_timesync_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    timesync_packet_t timesync
-);
-
-typedef struct {
     uint8_t sensor_id;
     uint8_t unit;
     float value;
@@ -190,6 +177,12 @@ protocol_err_t make_config_packet(
     config_packet_t config
 );
 
+protocol_err_t get_packet_len(
+    const uint8_t header[],
+    size_t header_len,
+    uint16_t *data_len
+);
+
 typedef struct {
     packet_type_t packet_type;
     union {
@@ -202,8 +195,8 @@ typedef struct {
 } server_payload_t;
 
 protocol_err_t server_parse_packet(
-    const uint8_t packet[],
-    size_t packet_len,
+    const uint8_t buffer[],
+    size_t buffer_len,
     server_payload_t *payload
 );
 
@@ -211,15 +204,16 @@ typedef struct {
     packet_type_t packet_type;
     union {
         header_only_packet_t header_only;
-        timesync_packet_t timesync;
         control_packet_t control;
         stream_start_packet_t stream_start;
+        ack_packet_t ack;
+        nack_packet_t nack;
     } payload_data;
 } client_payload_t;
 
 protocol_err_t client_parse_packet(
-    const uint8_t packet[],
-    size_t packet_len,
+    const uint8_t buffer[],
+    size_t buffer_len,
     client_payload_t *payload
 );
 
