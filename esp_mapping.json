@@ -1,82 +1,87 @@
 {
     "ADC_map": {
         "ADC1": {
+            "addr": 64,
             "DRDY_pin": 21
         },
         "ADC2": {
+            "addr": 65,
             "DRDY_pin": 12
         },
         "ADC3": {
+            "addr": 66,
             "DRDY_pin": 14
         },
         "ADC4": {
+            "addr": 68,
             "DRDY_pin": 11
         },
         "ADC5": {
+            "addr": 69,
             "DRDY_pin": 13
         }
     },
     "sensor_map": {
         "TC1": {
-            "ADC_index": 5,
+            "ADC_index": "ADC5",
             "high_pin": 3,
             "low_pin": 2
         },
         "TC2": {
-            "ADC_index": 5,
+            "ADC_index": "ADC5",
             "high_pin": 1,
             "low_pin": 0
         },
         "TC3": {
-            "ADC_index": 3,
+            "ADC_index": "ADC3",
             "high_pin": 3,
             "low_pin": 2
         },
         "TC4": {
-            "ADC_index": 3,
+            "ADC_index": "ADC3",
             "high_pin": 1,
             "low_pin": 0
         },
         "PT1": {
-            "ADC_index": 4,
+            "ADC_index": "ADC4",
             "pin": 0
         },
         "PT2": {
-            "ADC_index": 4,
+            "ADC_index": "ADC4",
             "pin": 1
         },
         "PT3": {
-            "ADC_index": 2,
+            "ADC_index": "ADC2",
             "pin": 2
         },
         "PT4": {
-            "ADC_index": 2,
+            "ADC_index": "ADC2",
             "pin": 3
         },
         "PT5": {
-            "ADC_index": 2,
+            "ADC_index": "ADC2",
             "pin": 0
         },
         "PT6": {
-            "ADC_index": 2,
+            "ADC_index": "ADC2",
             "pin": 1
         },
         "LC_THRUST": {
-            "ADC_index": 1,
+            "ADC_index": "ADC1",
             "high_pin": 3,
             "low_pin": 2
         },
         "LC_FILL": {
-            "ADC_index": 1,
+            "ADC_index": "ADC1",
             "high_pin": 1,
             "low_pin": 0
         },
         "IGN_RESIST_READ": {
-            "ADC_index": 4,
+            "ADC_index": "ADC4",
             "pin": 3
         },
         "IGN_CURRENT_READ": {
-            "ADC_index": 4,
+            "ADC_index": "ADC4",
             "pin": 2
         }
     },

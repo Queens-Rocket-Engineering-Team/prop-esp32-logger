@@ -3,17 +3,16 @@
 
 #include "ads112c04.h"
 #include "wifi_tools.h"
+#include "esp_config_json.h"
 #include <driver/i2c_master.h>
 #include <esp_netif.h>
 #include <freertos/FreeRTOS.h>
 
 #define SDA_PIN 9
 #define SCL_PIN 10
-#define MAX_ADCS 16
 
 typedef struct {
-    ads112c04_t adcs[MAX_ADCS]; // 16 configurable i2c addresses
-    size_t num_adcs;
+    ads112c04_t adcs[CONFIG_NUM_ADCS];
     i2c_master_bus_handle_t bus_handle;
 } app_ctx_t;
 

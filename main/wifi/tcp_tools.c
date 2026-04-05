@@ -200,27 +200,27 @@ void tcp_client_send(void *pvParams) {
             switch (payload.packet_type) {
             case PT_CONFIG:
                 make_config_packet(
-                    tx_buffer, &packet_len, payload.payload_data.config
+                    tx_buffer, &packet_len, &payload.payload_data.config
                 );
                 break;
             case PT_DATA:
                 make_data_packet(
-                    tx_buffer, &packet_len, payload.payload_data.data
+                    tx_buffer, &packet_len, &payload.payload_data.data
                 );
                 break;
             case PT_STATUS:
                 make_status_packet(
-                    tx_buffer, &packet_len, payload.payload_data.status
+                    tx_buffer, &packet_len, &payload.payload_data.status
                 );
                 break;
             case PT_ACK:
                 make_ack_packet(
-                    tx_buffer, &packet_len, payload.payload_data.ack
+                    tx_buffer, &packet_len, &payload.payload_data.ack
                 );
                 break;
             case PT_NACK:
                 make_nack_packet(
-                    tx_buffer, &packet_len, payload.payload_data.nack
+                    tx_buffer, &packet_len, &payload.payload_data.nack
                 );
                 break;
             default:

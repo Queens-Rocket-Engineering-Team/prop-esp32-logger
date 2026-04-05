@@ -1,22 +1,90 @@
 #include "setup.h"
 #include "ads112c04.h"
+#include "esp_config_json.h"
 #include "wifi_tools.h"
 #include <driver/i2c_master.h>
+#include <esp_check.h>
 #include <esp_err.h>
 #include <esp_wifi.h>
 #include <nvs_flash.h>
 
-static esp_err_t i2c_master_bus_scan(
+static const char *TAG = "SETUP";
+
+static esp_err_t s_i2c_master_bus_scan(
     i2c_master_bus_handle_t bus_handle,
     uint8_t address[],
     size_t address_len
-);
+) {
+    if (address == NULL || address_len == 0) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
-static esp_err_t setup_i2c(
-    i2c_master_bus_handle_t *bus_handle,
-    ads112c04_t devices[],
-    size_t *num_devices
-);
+    size_t addr_index = 0;
+    esp_err_t err;
+    // non-reserved i2c addresses from 0x08 to 0x78
+    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
+        err = i2c_master_probe(bus_handle, addr, 100);
+
+        if (err == ESP_OK) {
+            if (addr_index < address_len - 1) { // leave space for terminator
+                address[addr_index++] = addr;
+            } else {
+                address[addr_index] = 0xFF;
+                return ESP_ERR_NO_MEM;
+            }
+        } else if (err == ESP_ERR_NOT_FOUND) {
+            continue;
+        } else {
+            address[addr_index] = 0xFF;
+            return err;
+        }
+    }
+    address[addr_index] = 0xFF;
+    return ESP_OK;
+}
+
+static esp_err_t s_setup_i2c(
+    i2c_master_bus_handle_t bus_handle,
+    ads112c04_t adcs[]
+) {
+
+    if (adcs == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // initialize bus
+    i2c_master_bus_config_t i2c_mst_config = {
+        .i2c_port = I2C_NUM_0,
+        .scl_io_num = SCL_PIN,
+        .sda_io_num = SDA_PIN,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = false, // external 1k pullups, dont need
+    };
+
+    // initialize i2c master
+    ESP_RETURN_ON_ERROR(i2c_new_master_bus(&i2c_mst_config, &bus_handle), TAG, "Failed to create I2C bus");
+
+    // address array terminated with 0xFF, 112 possible addresses
+    uint8_t adc_addr[113];
+    // scan for all addresses on i2c bus
+    ESP_RETURN_ON_ERROR(s_i2c_master_bus_scan(bus_handle, adc_addr, sizeof(adc_addr)), TAG, "Failed to scan I2C bus");
+
+    // set up devices on bus
+    size_t i;
+    for (i = 0; i < CONFIG_NUM_ADCS && adc_addr[i] != 0xFF; i++) {
+
+        const ads112c04_config_t adc_cfg = {
+            .addr = adc_addr[i],
+            .bus_handle = bus_handle,
+            .drdy_pin = adc_addr_to_drdy(adc_addr[i]),
+        };
+
+        ESP_RETURN_ON_ERROR(ads112c04_init(&adcs[i], &adc_cfg), TAG, "Failed to initialize ADS112C04");
+
+    }
+    return ESP_OK;
+}
 
 void app_setup(app_ctx_t *app_ctx) {
     if (!app_ctx) {
@@ -24,7 +92,7 @@ void app_setup(app_ctx_t *app_ctx) {
     }
 
     ESP_ERROR_CHECK(
-        setup_i2c(&app_ctx->bus_handle, app_ctx->adcs, &app_ctx->num_adcs)
+        s_setup_i2c(app_ctx->bus_handle, app_ctx->adcs)
     );
 }
 
@@ -85,90 +153,4 @@ void network_setup(network_ctx_t *network_ctx) {
 
     network_ctx->ssdp_sock = -1;
     network_ctx->server_sock = -1;
-}
-
-static esp_err_t setup_i2c(
-    i2c_master_bus_handle_t *bus_handle,
-    ads112c04_t devices[],
-    size_t *num_devices
-) {
-
-    if (bus_handle == NULL || devices == NULL || num_devices == NULL) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    // initialize bus
-    i2c_master_bus_config_t i2c_mst_config = {
-        .i2c_port = I2C_NUM_0,
-        .scl_io_num = SCL_PIN,
-        .sda_io_num = SDA_PIN,
-        .clk_source = I2C_CLK_SRC_DEFAULT,
-        .glitch_ignore_cnt = 7,
-        .flags.enable_internal_pullup = false, // external 1k pullups, dont need
-    };
-
-    esp_err_t ret;
-    // initialize i2c master
-    ret = i2c_new_master_bus(&i2c_mst_config, bus_handle);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-
-    // address array terminated with 0xFF, 112 possible addresses
-    uint8_t device_addr[113];
-    // scan for all addresses on i2c bus
-    ret = i2c_master_bus_scan(*bus_handle, device_addr, 113);
-    if (ret != ESP_OK) {
-        return ret;
-    }
-
-    // set up devices on bus
-    size_t i;
-    for (i = 0; i < MAX_ADCS && device_addr[i] != 0xFF; i++) {
-
-        ret = ads112c04_set_address(&devices[i], device_addr[i]);
-        if (ret != ESP_OK) {
-            return ret;
-        }
-
-        ret = ads112c04_init_i2c(&devices[i], bus_handle);
-        if (ret != ESP_OK) {
-            return ret;
-        }
-    }
-    *num_devices = i;
-    return ESP_OK;
-}
-
-static esp_err_t i2c_master_bus_scan(
-    i2c_master_bus_handle_t bus_handle,
-    uint8_t address[],
-    size_t address_len
-) {
-    if (!address || address_len == 0) {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    size_t addr_index = 0;
-    esp_err_t ret;
-    // non-reserved i2c addresses from 0x08 to 0x78
-    for (uint8_t addr = 0x08; addr < 0x78; addr++) {
-        ret = i2c_master_probe(bus_handle, addr, 100);
-
-        if (ret == ESP_OK) {
-            if (addr_index < address_len - 1) { // leave space for terminator
-                address[addr_index++] = addr;
-            } else {
-                address[addr_index] = 0xFF;
-                return ESP_ERR_NO_MEM;
-            }
-        } else if (ret == ESP_ERR_NOT_FOUND) {
-            continue;
-        } else {
-            address[addr_index] = 0xFF;
-            return ret;
-        }
-    }
-    address[addr_index] = 0xFF;
-    return ESP_OK;
 }

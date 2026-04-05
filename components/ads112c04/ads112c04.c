@@ -13,6 +13,9 @@ static const char *TAG = "ADS112C04";
 
 // initialize the adc on the i2c bus
 static esp_err_t s_init_i2c(ads112c04_t *ads112c04, i2c_master_bus_handle_t bus_handle) {
+    if (bus_handle == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
@@ -138,7 +141,7 @@ static uint8_t s_get_gain_bits(uint8_t gain) {
 }
 
 // get the register mux code for a given pin pair
-static uint8_t s_get_mux_code(uint8_t p_pin, uint8_t n_pin) {
+static uint8_t s_get_mux_code(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin) {
     if (p_pin > 4 || n_pin > 4) {
         return INVALID_MUX;
     }
@@ -179,12 +182,12 @@ static void IRAM_ATTR drdy_isr_handler(void *arg) {
 }
 
 // initialize the ads112c04 device
-esp_err_t ads112c04_init(ads112c04_t *ads112c04, uint8_t addr, i2c_master_bus_handle_t bus_handle, uint8_t drdy_pin) {
-    if (ads112c04 == NULL || bus_handle == NULL) {
+esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads112c04_cfg) {
+    if (ads112c04 == NULL || ads112c04_cfg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    ads112c04->address = addr;
-    ESP_RETURN_ON_ERROR(s_init_i2c(ads112c04, bus_handle), TAG, "I2C init failed");
+    ads112c04->address = ads112c04_cfg->addr;
+    ESP_RETURN_ON_ERROR(s_init_i2c(ads112c04, ads112c04_cfg->bus_handle), TAG, "I2C init failed");
 
     // initialize conversion binary semaphore
     ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
@@ -194,7 +197,7 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, uint8_t addr, i2c_master_bus_ha
     gpio_config_t io_conf = {
         .intr_type = GPIO_INTR_NEGEDGE,
         .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = (1ULL << drdy_pin),
+        .pin_bit_mask = (1ULL << ads112c04_cfg->drdy_pin),
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .pull_up_en = GPIO_PULLUP_DISABLE
     };
@@ -207,7 +210,7 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, uint8_t addr, i2c_master_bus_ha
     }
 
     ESP_RETURN_ON_ERROR(
-        gpio_isr_handler_add(drdy_pin, drdy_isr_handler, (void *)ads112c04), TAG, "Failed to add GPIO to ISR handler"
+        gpio_isr_handler_add(ads112c04_cfg->drdy_pin, drdy_isr_handler, (void *)ads112c04), TAG, "Failed to add GPIO to ISR handler"
     );
 
     // set default ADC settings
@@ -217,7 +220,21 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, uint8_t addr, i2c_master_bus_ha
     return ESP_OK;
 }
 
-esp_err_t ads112c04_set_inputs(ads112c04_t *ads112c04, int8_t p_pin, int8_t n_pin, uint8_t gain, bool pga_enabled) {
+bool ads112c04_is_gain_valid(uint8_t gain) {
+    if (s_get_gain_bits(gain) == INVALID_GAIN) {
+        return false;
+    }
+    return true;
+}
+
+bool ads112c04_is_mux_valid(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin) {
+    if (s_get_mux_code(p_pin, n_pin) == INVALID_MUX) {
+        return false;
+    }
+    return true;
+}
+
+esp_err_t ads112c04_set_inputs(ads112c04_t *ads112c04, ads112c04_pin_t p_pin, ads112c04_pin_t n_pin, uint8_t gain, bool pga_enabled) {
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -279,8 +296,8 @@ esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04) {
 esp_err_t ads112c04_get_single_voltage_reading(
     ads112c04_t *ads112c04,
     float *voltage,
-    int8_t p_pin,
-    int8_t n_pin,
+    ads112c04_pin_t p_pin,
+    ads112c04_pin_t n_pin,
     uint8_t gain,
     bool pga_enabled
 ) {

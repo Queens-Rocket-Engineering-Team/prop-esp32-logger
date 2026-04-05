@@ -1,5 +1,4 @@
-#ifndef CONTROL_H
-#define CONTROL_H
+#pragma once
 
 #include <driver/gpio.h>
 #include <esp_err.h>
@@ -39,5 +38,3 @@ esp_err_t open_control(control_t *control);
 esp_err_t close_control(control_t *control);
 
 control_state_t get_control_state(const control_t *control);
-
-#endif

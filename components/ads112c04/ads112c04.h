@@ -2,16 +2,16 @@
 
 #include <driver/i2c_master.h>
 #include <esp_err.h>
-#include <stdint.h>
 #include <freertos/FreeRTOS.h>
+#include <stdint.h>
 
-enum {
+typedef enum {
     ADS112C04_PIN0 = 0,
     ADS112C04_PIN1 = 1,
     ADS112C04_PIN2 = 2,
     ADS112C04_PIN3 = 3,
     ADS112C04_AVSS = 4
-};
+} ads112c04_pin_t;
 
 typedef enum {
     CM_SINGLE_SHOT,
@@ -29,8 +29,28 @@ typedef struct {
     conversion_mode_t conversion_mode;
 } ads112c04_t;
 
-esp_err_t ads112c04_init_i2c(ads112c04_t *ads112c04, i2c_master_bus_handle_t bus_handle);
+typedef struct {
+    uint8_t addr;
+    i2c_master_bus_handle_t bus_handle;
+    uint8_t drdy_pin;
+} ads112c04_config_t;
 
-esp_err_t ads112c04_set_address(ads112c04_t *ads112c04, uint8_t addr);
+esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads112c04_cfg);
 
-esp_err_t ads112c04_get_internal_temperature(ads112c04_t *ads112c04, float *temperature);
+bool ads112c04_is_gain_valid(uint8_t gain);
+bool ads112c04_is_mux_valid(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin);
+
+esp_err_t ads112c04_set_inputs(ads112c04_t *ads112c04, ads112c04_pin_t p_pin, ads112c04_pin_t n_pin, uint8_t gain, bool pga_enabled);
+
+esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04);
+
+esp_err_t ads112c04_get_single_voltage_reading(
+    ads112c04_t *ads112c04,
+    float *voltage,
+    ads112c04_pin_t p_pin,
+    ads112c04_pin_t n_pin,
+    uint8_t gain,
+    bool pga_enabled
+);
+
+esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float *temperature);

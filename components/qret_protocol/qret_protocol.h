@@ -1,5 +1,4 @@
-#ifndef QRET_PROTOCOL_H
-#define QRET_PROTOCOL_H
+#pragma once
 
 #include <stdint.h>
 
@@ -11,6 +10,37 @@ typedef enum {
     PROTOCOL_INVALID_PACKET_TYPE,
     PROTOCOL_VERSION_MISMATCH_ERR,
 } protocol_err_t;
+
+typedef enum {
+    UNIT_VOLTS = 0x00,
+    UNIT_AMPS = 0x01,
+    UNIT_CELSIUS = 0x02,
+    UNIT_FAHRENHEIT = 0x03,
+    UNIT_KELVIN = 0x04,
+    UNIT_PSI = 0x05,
+    UNIT_BAR = 0x06,
+    UNIT_PASCAL = 0x07,
+    UNIT_GRAMS = 0x08,
+    UNIT_KILOGRAMS = 0x09,
+    UNIT_POUNDS = 0x0A,
+    UNIT_NEWTONS = 0x0B,
+    UNIT_SECONDS = 0x0C,
+    UNIT_MILLISECONDS = 0x0D,
+    UNIT_HERTZ = 0x0E,
+    UNIT_OHMS = 0x0F,
+    UNIT_UNITLESS = 0xFF
+} protocol_unit_t;
+
+typedef enum {
+    // Packet error codes
+    ERR_NONE = 0x00,
+    ERR_UNKNOWN_TYPE = 0x01,
+    ERR_INVALID_ID = 0x02,
+    ERR_HARDWARE_FAULT = 0x03,
+    ERR_BUSY = 0x04,
+    ERR_NOT_STREAMING = 0x05,
+    ERR_INVALID_PARAM = 0x06,
+} packet_err_t;
 
 typedef enum {
     // Server -> Device
@@ -31,17 +61,6 @@ typedef enum {
     PT_ACK = 0x13,
     PT_NACK = 0x14,
 } packet_type_t;
-
-typedef enum {
-    // Packet error codes
-    ERR_NONE = 0x00,
-    ERR_UNKNOWN_TYPE = 0x01,
-    ERR_INVALID_ID = 0x02,
-    ERR_HARDWARE_FAULT = 0x03,
-    ERR_BUSY = 0x04,
-    ERR_NOT_STREAMING = 0x05,
-    ERR_INVALID_PARAM = 0x06,
-} packet_err_t;
 
 // Device status
 #define DS_INACTIVE 0x00
@@ -78,7 +97,7 @@ protocol_err_t make_header_only_packet(
     uint8_t packet[],
     size_t *packet_len,
     packet_type_t packet_type,
-    header_only_packet_t header_only
+    const header_only_packet_t *header_only
 );
 
 typedef struct {
@@ -90,7 +109,7 @@ typedef struct {
 protocol_err_t make_status_packet(
     uint8_t packet[],
     size_t *packet_len,
-    status_packet_t status
+    const status_packet_t *status
 );
 
 typedef struct {
@@ -102,7 +121,7 @@ typedef struct {
 protocol_err_t make_stream_start_packet(
     uint8_t packet[],
     size_t *packet_len,
-    stream_start_packet_t stream_start
+    const stream_start_packet_t *stream_start
 );
 
 typedef struct {
@@ -115,7 +134,7 @@ typedef struct {
 protocol_err_t make_control_packet(
     uint8_t packet[],
     size_t *packet_len,
-    control_packet_t control
+    const control_packet_t *control
 );
 
 typedef struct {
@@ -128,7 +147,7 @@ typedef struct {
 protocol_err_t make_ack_packet(
     uint8_t packet[],
     size_t *packet_len,
-    ack_packet_t ack
+    const ack_packet_t *ack
 );
 
 typedef struct {
@@ -142,7 +161,7 @@ typedef struct {
 protocol_err_t make_nack_packet(
     uint8_t packet[],
     size_t *packet_len,
-    nack_packet_t nack
+    const nack_packet_t *nack
 );
 
 typedef struct {
@@ -161,11 +180,11 @@ typedef struct {
 protocol_err_t make_data_packet(
     uint8_t packet[],
     size_t *packet_len,
-    data_packet_t data
+    const data_packet_t *data
 );
 
 typedef struct {
-    char *json_config;
+    const char *json_config;
     uint32_t json_config_len;
     uint8_t sequence;
     uint32_t ts_offset;
@@ -174,7 +193,7 @@ typedef struct {
 protocol_err_t make_config_packet(
     uint8_t packet[],
     size_t *packet_len,
-    config_packet_t config
+    const config_packet_t *config
 );
 
 protocol_err_t get_packet_len(
@@ -216,5 +235,3 @@ protocol_err_t client_parse_packet(
     size_t buffer_len,
     client_payload_t *payload
 );
-
-#endif

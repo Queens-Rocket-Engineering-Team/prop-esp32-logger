@@ -24,8 +24,6 @@ def read_json(file_path: str) -> tuple[dict, str]:
         raise
     
 
-#--------------------------------------------------------------------------#
-
 parser = argparse.ArgumentParser(description="Convert JSON config to .h header")
 parser.add_argument('config', type=str)
 parser.add_argument('mapping', type=str)
@@ -33,22 +31,45 @@ parser.add_argument('outfile', type=str)
 args = parser.parse_args()
 
 config, config_str = read_json(args.config)
-structs = []
+mapping, _ = read_json(args.mapping)
+
+adc_map = mapping.get('ADC_map').values()
+sensor_map = mapping.get('sensor_map').values()
+control_map = mapping.get('control_map').values()
+
+addr_to_drdy_cases = '\n'.join(
+    f"    case {adc.get('addr')}:\n        return {adc.get('DRDY_pin')};"
+    for adc in adc_map
+)
+
+header_content = f"""\
+#pragma once
+
+#include <stdint.h>
+
+// Auto-generated header from esp_config.json and esp_mapping.json
+
+static const char json_config_str[] = "{config_str}";
+
+#define CONFIG_NUM_ADCS {len(mapping.get('ADC_map'))}
+
+static inline uint8_t adc_addr_to_drdy(uint8_t addr) {{
+    switch (addr) {{
+{addr_to_drdy_cases}
+    default:
+        return 0xFF;
+    }}
+}}
+
+
+
+
+
+"""
 
 try:
     with open(args.outfile, 'w') as header:
-        header.write('#ifndef ESP_CONFIG_H\n')
-        header.write('#define ESP_CONFIG_H\n')
-        header.write('\n')
-        header.write('#include <stdbool.h>\n')
-        header.write('\n')
-        header.write('// Auto-generated header from ESPConfig.json\n')
+        header.write(header_content)
         
-        header.write(f'\nstatic char json_config_str[] = "{config_str}";\n')
-
-        
-
-        header.write('\n#endif\n')
-
 except Exception as e:
     print(f"Failed to create header file: {e}")

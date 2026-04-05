@@ -1,5 +1,6 @@
-#include "control.h"
 #include <stdbool.h>
+
+#include "control.h"
 
 esp_err_t control_init(
     control_t *control,

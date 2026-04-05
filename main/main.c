@@ -1,4 +1,4 @@
-#include "ADS112C04.h"
+#include "ads112c04.h"
 #include "qret_protocol.h"
 #include "setup.h"
 #include "wifi_tools.h"
@@ -65,7 +65,7 @@ void app_main(void) {
 
             payload_out.packet_type = PT_ACK;
             sequence++;
-            ack_packet_t ack = {
+            const ack_packet_t ack = {
                 .ack_packet_type = PT_TIMESYNC,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
                 .sequence = sequence,
@@ -97,7 +97,7 @@ void app_main(void) {
         case PT_HEARTBEAT: {
             payload_out.packet_type = PT_ACK;
             sequence++;
-            ack_packet_t ack = {
+            const ack_packet_t ack = {
                 .ack_packet_type = PT_HEARTBEAT,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
                 .sequence = sequence,
