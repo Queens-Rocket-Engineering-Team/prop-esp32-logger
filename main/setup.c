@@ -1,5 +1,5 @@
 #include "setup.h"
-#include "ADS112C04.h"
+#include "ads112c04.h"
 #include "wifi_tools.h"
 #include <driver/i2c_master.h>
 #include <esp_err.h>
@@ -14,7 +14,7 @@ static esp_err_t i2c_master_bus_scan(
 
 static esp_err_t setup_i2c(
     i2c_master_bus_handle_t *bus_handle,
-    ADS112C04_t devices[],
+    ads112c04_t devices[],
     size_t *num_devices
 );
 
@@ -89,7 +89,7 @@ void network_setup(network_ctx_t *network_ctx) {
 
 static esp_err_t setup_i2c(
     i2c_master_bus_handle_t *bus_handle,
-    ADS112C04_t devices[],
+    ads112c04_t devices[],
     size_t *num_devices
 ) {
 
@@ -126,12 +126,12 @@ static esp_err_t setup_i2c(
     size_t i;
     for (i = 0; i < MAX_ADCS && device_addr[i] != 0xFF; i++) {
 
-        ret = ADS112C04_set_address(&devices[i], device_addr[i]);
+        ret = ads112c04_set_address(&devices[i], device_addr[i]);
         if (ret != ESP_OK) {
             return ret;
         }
 
-        ret = ADS112C04_init_i2c(&devices[i], bus_handle);
+        ret = ads112c04_init_i2c(&devices[i], bus_handle);
         if (ret != ESP_OK) {
             return ret;
         }

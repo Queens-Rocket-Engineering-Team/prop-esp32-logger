@@ -1,16 +1,20 @@
 BasedOnStyle: LLVM
 IndentWidth: 4
-ContinuationIndentWidth: 4
+ColumnLimit: 120
+
 PointerAlignment: Right
 BreakBeforeBraces: Attach
+
 AllowShortIfStatementsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
+
 BinPackParameters: false
 BinPackArguments: false
 AllowAllParametersOfDeclarationOnNextLine: false
 AlignAfterOpenBracket: BlockIndent
 AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
+
 PenaltyReturnTypeOnItsOwnLine: 1000
 PenaltyBreakAssignment: 1000
 AllowShortEnumsOnASingleLine: false

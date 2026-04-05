@@ -78,8 +78,9 @@ void app_main(void) {
             );
         } break;
 
-        case PT_CONTROL:
-            break;
+        case PT_CONTROL: {
+
+        } break;
 
         case PT_STATUS_REQUEST:
             break;
