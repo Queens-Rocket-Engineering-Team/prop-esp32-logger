@@ -1,0 +1,134 @@
+{
+    "device_name": "PANDA-V3",
+    "device_type": "Sensor Monitor",
+
+    "i2c_bus": {
+        "sda_pin": 9,
+        "scl_pin": 10,
+        "frequency_Hz": 100000
+    },
+    "wifi_indicator_pin": 1,
+
+    "sensor_info": {
+        "thermocouple": {
+            "TCRun": {
+                "sensor_map": "TC1",
+                "type" : "K",
+                "units" : "C"
+            },
+            "TCCombustionChamber": {
+                "sensor_map": "TC2",
+                "type" : "K",
+                "units" : "C"
+            }
+        },
+
+        "pressure_transducer": {
+            "PTRun": {
+                "sensor_map": "PT1",
+                "max_pressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTCombustionChamber": {
+                "sensor_map": "PT2",
+                "max_pressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTPreInjector": {
+                "sensor_map": "PT3",
+                "max_pressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTN2OSupply": {
+                "sensor_map": "PT4",
+                "max_pressure_PSI" : 1000,
+                "units" : "PSI"
+            },
+            "PTN2Supply": {
+                "sensor_map": "PT5",
+                "max_pressure_PSI" : 200,
+                "units" : "PSI"
+            }
+        },
+
+        "load_cell": {
+            "LCFill": {
+                "sensor_map": "LC_FILL",
+                "loadRating_N" : 1962,
+                "excitation_V" : 5,
+                "sensitivity_vV" : 2,
+                "units" : "kg"
+            },
+            "LCThrust": {
+                "sensor_map": "LC_THRUST",
+                "loadRating_N" : 5000,
+                "excitation_V" : 5,
+                "sensitivity_vV" : 2,
+                "units" : "kg"
+            }
+        },
+
+        "resistance" : {
+            "ignResistance" : {
+                "sensor_map": "IGN_RESIST_READ",
+                "injected_current" : 1500
+            }
+        },
+
+        "current" : {
+            "ignCurrent" : {
+                "sensor_map": "IGN_CURRENT_READ",
+                "shunt_resistor_ohms" : 0.025,
+                "csa_gain" : 20
+            }
+        }
+    },
+
+    "controls": {
+        "AVN2OFill": {
+            "control_map": "AV_FILL",
+            "default_state": "CLOSED",
+            "type": "solenoid"
+        },
+        "AVRun": {
+            "control_map": "AV_RUN",
+            "default_state": "CLOSED",
+            "type": "solenoid"
+        },
+        "AVVent": {
+            "control_map": "AV3",
+            "default_state": "OPEN",
+            "type": "solenoid"
+        },
+        "AVN2Fill": {
+            "control_map": "AV4",
+            "default_state": "OPEN",
+            "type": "solenoid"
+        },
+        "AVPurge": {
+            "control_map": "AV5",
+            "default_state": "OPEN",
+            "type": "solenoid"
+        },
+        "AVDump": {
+            "control_map": "AV6",
+            "default_state" : "OPEN",
+            "type": "solenoid"
+        },
+        "Safe24": {
+            "control_map": "SAFE_24V_CTL",
+            "default_state" : "OPEN",
+            "type" : "relay"
+        },
+        "IgnPrime": {
+            "control_map": "IGNITOR_PRIME_CTL",
+            "default_state" : "OPEN",
+            "type" : "relay"
+        },
+        "IgnRun": {
+            "control_map": "IGNITOR_RUN_CTL",
+            "default_state" : "OPEN",
+            "type" : "relay"
+        }
+    }
+}
