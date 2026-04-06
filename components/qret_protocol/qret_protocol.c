@@ -13,11 +13,7 @@ typedef struct {
     uint32_t timestamp;
 } protocol_header_t;
 
-static protocol_err_t s_pack_header(
-    uint8_t header[],
-    size_t header_len,
-    const protocol_header_t *header_data
-) {
+static protocol_err_t s_pack_header(uint8_t header[], size_t header_len, const protocol_header_t *header_data) {
     if (header == NULL || header_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
@@ -40,11 +36,7 @@ static protocol_err_t s_pack_header(
     return PROTOCOL_OK;
 }
 
-static protocol_err_t s_unpack_header(
-    const uint8_t header[],
-    size_t header_len,
-    protocol_header_t *header_data
-) {
+static protocol_err_t s_unpack_header(const uint8_t header[], size_t header_len, protocol_header_t *header_data) {
     if (header == NULL || header_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
@@ -59,12 +51,10 @@ static protocol_err_t s_unpack_header(
     header_data->packet_type = header[1];
     header_data->sequence = header[2];
 
-    header_data->data_length = ((uint16_t)header[3] << 8) |
-                               ((uint16_t)header[4]);
+    header_data->data_length = ((uint16_t)header[3] << 8) | ((uint16_t)header[4]);
 
-    header_data->timestamp = ((uint32_t)header[5] << 24) |
-                             ((uint32_t)header[6] << 16) |
-                             ((uint32_t)header[7] << 8) | ((uint32_t)header[8]);
+    header_data->timestamp = ((uint32_t)header[5] << 24) | ((uint32_t)header[6] << 16) | ((uint32_t)header[7] << 8) |
+                             ((uint32_t)header[8]);
 
     return PROTOCOL_OK;
 }
@@ -118,11 +108,7 @@ protocol_err_t make_header_only_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_status_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const status_packet_t *status
-) {
+protocol_err_t make_status_packet(uint8_t packet[], size_t *packet_len, const status_packet_t *status) {
     if (packet == NULL || packet_len == NULL || status == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
@@ -185,11 +171,7 @@ protocol_err_t make_stream_start_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_control_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const control_packet_t *control
-) {
+protocol_err_t make_control_packet(uint8_t packet[], size_t *packet_len, const control_packet_t *control) {
 
     if (packet == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -220,11 +202,7 @@ protocol_err_t make_control_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_ack_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const ack_packet_t *ack
-) {
+protocol_err_t make_ack_packet(uint8_t packet[], size_t *packet_len, const ack_packet_t *ack) {
 
     if (packet == NULL || packet_len == NULL || ack == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -256,11 +234,7 @@ protocol_err_t make_ack_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_nack_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const nack_packet_t *nack
-) {
+protocol_err_t make_nack_packet(uint8_t packet[], size_t *packet_len, const nack_packet_t *nack) {
 
     if (packet == NULL || packet_len == NULL || nack == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -292,20 +266,15 @@ protocol_err_t make_nack_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_data_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const data_packet_t *data
-) {
+protocol_err_t make_data_packet(uint8_t packet[], size_t *packet_len, const data_packet_t *data) {
 
     if (packet == NULL || packet_len == NULL || data == NULL || data->sensor_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
-    const size_t data_size = 1 + (6 * data->sensor_count);
-    if (*packet_len < HEADER_SIZE + data_size) {
+    if (*packet_len < DATA_PACKET_SIZE(data->sensor_count)) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
-    *packet_len = HEADER_SIZE + data_size;
+    *packet_len = DATA_PACKET_SIZE(data->sensor_count);
 
     protocol_err_t err;
 
@@ -313,7 +282,7 @@ protocol_err_t make_data_packet(
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_DATA,
         .sequence = data->sequence,
-        .data_length = HEADER_SIZE + data_size,
+        .data_length = DATA_PACKET_SIZE(data->sensor_count),
         .timestamp = data->ts_offset,
     };
 
@@ -325,7 +294,7 @@ protocol_err_t make_data_packet(
     packet[HEADER_SIZE + 0] = data->sensor_count;
 
     for (size_t i = 0; i < data->sensor_count; i++) {
-        size_t offset = HEADER_SIZE + 1 + (6 * i);
+        size_t offset = DATA_PACKET_SIZE(i);
         packet[offset + 0] = data->sensor_data[i].sensor_id;
         packet[offset + 1] = data->sensor_data[i].unit;
         // Float to bytes
@@ -339,24 +308,19 @@ protocol_err_t make_data_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t make_config_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const config_packet_t *config
-) {
+protocol_err_t make_config_packet(uint8_t packet[], size_t *packet_len, const config_packet_t *config) {
 
     if (packet == NULL || packet_len == NULL || config == NULL || config->json_config == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     uint32_t packet_data_len = config->json_config_len;
-    if (config->json_config_len > 0 &&
-        config->json_config[config->json_config_len - 1] == '\0') {
+    if (config->json_config_len > 0 && config->json_config[config->json_config_len - 1] == '\0') {
         packet_data_len--; // Remove null terminator from json_config
     }
-    if (*packet_len < (HEADER_SIZE + 4 + packet_data_len)) {
+    if (*packet_len < CONFIG_PACKET_SIZE(packet_data_len)) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
-    *packet_len = HEADER_SIZE + (4 + packet_data_len);
+    *packet_len = CONFIG_PACKET_SIZE(packet_data_len);
 
     protocol_err_t err;
 
@@ -383,11 +347,7 @@ protocol_err_t make_config_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t get_packet_len(
-    const uint8_t header[],
-    size_t header_len,
-    uint16_t *data_len
-) {
+protocol_err_t get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len) {
     if (header == NULL || data_len == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
@@ -407,11 +367,7 @@ protocol_err_t get_packet_len(
     return PROTOCOL_OK;
 }
 
-protocol_err_t server_parse_packet(
-    const uint8_t buffer[],
-    size_t buffer_len,
-    server_payload_t *payload
-) {
+protocol_err_t server_parse_packet(const uint8_t buffer[], size_t buffer_len, server_payload_t *payload) {
 
     if (buffer == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -473,36 +429,26 @@ protocol_err_t server_parse_packet(
         payload->payload_data.data.sensor_count = count;
 
         for (size_t i = 0; i < count; i++) {
-            size_t offset = HEADER_SIZE + 1 + (6 * i);
-            payload->payload_data.data.sensor_data[i]
-                .sensor_id = buffer[offset + 0];
+            size_t offset = DATA_PACKET_SIZE(i);
+            payload->payload_data.data.sensor_data[i].sensor_id = buffer[offset + 0];
             payload->payload_data.data.sensor_data[i].unit = buffer[offset + 1];
             // Bytes to float
-            uint32_t value_bytes = (uint32_t)(buffer[offset + 2] << 24) |
-                                   (uint32_t)(buffer[offset + 3] << 16) |
-                                   (uint32_t)(buffer[offset + 4] << 8) |
-                                   (uint32_t)(buffer[offset + 5]);
-            memcpy(
-                &payload->payload_data.data.sensor_data[i].value,
-                &value_bytes,
-                sizeof(uint32_t)
-            );
+            uint32_t value_bytes = (uint32_t)(buffer[offset + 2] << 24) | (uint32_t)(buffer[offset + 3] << 16) |
+                                   (uint32_t)(buffer[offset + 4] << 8) | (uint32_t)(buffer[offset + 5]);
+            memcpy(&payload->payload_data.data.sensor_data[i].value, &value_bytes, sizeof(uint32_t));
         }
         payload->payload_data.data.sequence = header_data.sequence;
         payload->payload_data.data.ts_offset = header_data.timestamp;
         break;
     case PT_CONFIG:
-        uint32_t data_len = (uint32_t)(buffer[HEADER_SIZE + 0] << 24) |
-                            (uint32_t)(buffer[HEADER_SIZE + 1] << 16) |
-                            (uint32_t)(buffer[HEADER_SIZE + 2] << 8) |
-                            (uint32_t)buffer[HEADER_SIZE + 3];
-        if (header_data.data_length != HEADER_SIZE + (4 + data_len)) {
+        uint32_t data_len = (uint32_t)(buffer[HEADER_SIZE + 0] << 24) | (uint32_t)(buffer[HEADER_SIZE + 1] << 16) |
+                            (uint32_t)(buffer[HEADER_SIZE + 2] << 8) | (uint32_t)buffer[HEADER_SIZE + 3];
+        if (header_data.data_length != CONFIG_PACKET_SIZE(data_len)) {
             return PROTOCOL_ARRAY_LEN_ERR;
         }
         payload->payload_data.config.json_config_len = data_len;
 
-        payload->payload_data.config.json_config = (char *)(buffer +
-                                                            (HEADER_SIZE + 4));
+        payload->payload_data.config.json_config = (char *)(buffer + CONFIG_PACKET_SIZE(0));
 
         break;
     default:
@@ -512,11 +458,7 @@ protocol_err_t server_parse_packet(
     return PROTOCOL_OK;
 }
 
-protocol_err_t client_parse_packet(
-    const uint8_t buffer[],
-    size_t buffer_len,
-    client_payload_t *payload
-) {
+protocol_err_t client_parse_packet(const uint8_t buffer[], size_t buffer_len, client_payload_t *payload) {
 
     if (buffer == NULL || payload == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
@@ -557,9 +499,8 @@ protocol_err_t client_parse_packet(
         if (header_data.data_length != STREAM_START_PACKET_SIZE) {
             return PROTOCOL_ARRAY_LEN_ERR;
         }
-        payload->payload_data.stream_start
-            .stream_frequency = ((uint16_t)buffer[HEADER_SIZE + 0] << 8) |
-                                (uint16_t)buffer[HEADER_SIZE + 1];
+        payload->payload_data.stream_start.stream_frequency = ((uint16_t)buffer[HEADER_SIZE + 0] << 8) |
+                                                              (uint16_t)buffer[HEADER_SIZE + 1];
         payload->payload_data.stream_start.sequence = header_data.sequence;
         payload->payload_data.stream_start.ts_offset = header_data.timestamp;
         break;

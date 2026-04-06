@@ -19,7 +19,7 @@ typedef enum {
 } conversion_mode_t;
 
 typedef struct {
-    uint8_t address;
+    uint8_t addr;
     i2c_master_dev_handle_t dev_handle;
     SemaphoreHandle_t xSemaphoreDRDY;
     StaticSemaphore_t xSemaphoreBufferDRDY;
@@ -31,8 +31,9 @@ typedef struct {
 
 typedef struct {
     uint8_t addr;
-    i2c_master_bus_handle_t bus_handle;
     uint8_t drdy_pin;
+    i2c_master_bus_handle_t bus_handle;
+    uint32_t bus_frequency;
 } ads112c04_config_t;
 
 esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads112c04_cfg);

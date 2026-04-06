@@ -14,11 +14,8 @@ def read_json(file_path: str) -> tuple[dict, str]:
         with open(file_path, 'rb') as file:
             json_bytes = file.read()
             json_dict = orjson.loads(json_bytes)
-            json_string = json_bytes.decode('utf-8')
-            json_string = json_string.replace(r'"', r'\"')
-            json_string = json_string.replace('\r', '')
-            json_string = json_string.replace('\n', '\\n"\n"')
-            return json_dict, json_string
+            json_str = orjson.dumps(json_dict).decode('utf-8').replace(r'"', r'\"')
+            return json_dict, json_str
     except Exception as e:
         print(f"Failed to read config file: {e}")   
         raise
@@ -39,10 +36,10 @@ mapping, _ = read_json(args.mapping)
 num_adcs = len(mapping['ADC_map'])
 num_sensors = sum(len(sensor_group) for sensor_group in config['sensor_info'].values())
 
-addr_to_drdy_cases = '\n'.join(
-    f"    case 0x{adc['addr']}:\n        return {adc['DRDY_pin']};"
-    for adc in mapping['ADC_map'].values()
-)
+sda_pin = mapping['i2c_bus']['sda_pin']
+scl_pin = mapping['i2c_bus']['scl_pin']
+i2c_freq = mapping['i2c_bus']['frequency_Hz']
+wifi_indicator_pin = mapping['wifi_indicator_pin']
 
 header_content = f"""\
 #pragma once
@@ -64,6 +61,12 @@ static const char json_config_str[] = "{config_str}";
 #define CONFIG_NUM_ADCS {num_adcs}
 #define CONFIG_NUM_SENSORS {num_sensors}
 
+#define CONFIG_SDA_PIN {sda_pin}
+#define CONFIG_SCL_PIN {scl_pin}
+#define CONFIG_I2C_FREQUENCY {i2c_freq}
+
+#define CONFIG_WIFI_INDICATOR_PIN {wifi_indicator_pin}
+
 typedef enum {{
     THERMOCOUPLE,
     PRESSURE_TRANSDUCER,
@@ -83,16 +86,9 @@ typedef struct {{
     }} sensor;
 }} config_sensor_t;
 
+esp_err_t config_ads112c04s_init(ads112c04_t adcs[], size_t len_adcs, i2c_master_bus_handle_t bus_handle);
+
 esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads112c04_t adcs[], size_t len_adcs);
-
-static inline uint8_t adc_addr_to_drdy(uint8_t addr) {{
-    switch (addr) {{
-{addr_to_drdy_cases}
-    default:
-        return 0xFF;
-    }}
-}}
-
 """
 
 try:
@@ -184,11 +180,32 @@ sensor_templates = {
     },
 }
 
+def generate_adc_init(adc_cfg: dict, index: int) -> str:
+
+    adc_addr = adc_cfg['addr']
+    adc_DRDY = adc_cfg['DRDY_pin']
+
+    return f"""\
+    {{
+    const ads112c04_config_t adc_cfg = {{
+        .addr = {adc_addr},
+        .drdy_pin = {adc_DRDY},
+        .bus_handle = bus_handle,
+        .bus_frequency = CONFIG_I2C_FREQUENCY,
+    }};
+
+    ESP_RETURN_ON_ERROR(ads112c04_init(&adcs[{index}], &adc_cfg), TAG, "Failed to initialize ADS112C04, index {index}");
+    }}
+    """
+
 def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, index: int) -> str:
     template = sensor_templates.get(sensor_type)
 
-    pin_map = mapping['sensor_map'][sensor_cfg['sensor_index']]
-    adc_addr = mapping['ADC_map'][pin_map['ADC_index']]['addr']
+    sensor_key = sensor_cfg['sensor_index']
+    pin_map = mapping['sensor_map'][sensor_key]
+
+    adc_key = pin_map['ADC_index']
+    adc_addr = mapping['ADC_map'][adc_key]['addr']
 
     cfg_struct_fields = []
     for struct_field, json_key in template['cfg_struct_fields'].items():
@@ -209,20 +226,28 @@ def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, inde
         return ESP_ERR_NOT_FOUND;
     }}
 
-    sensors[{index}].sensor_type = {template.get('type_enum')};
+    sensors[{index}].sensor_type = {template['type_enum']};
 
-    const {template.get('cfg_struct_name')} cfg = {{
+    const {template['cfg_struct_name']} cfg = {{
         .adc = adc,
 {cfg_struct_fields_str}
     }};
 
-    {template.get('init_func')}(&sensors[{index}].sensor.{sensor_type}, &cfg);
+    ESP_RETURN_ON_ERROR({template['init_func']}(&sensors[{index}].sensor.{sensor_type}, &cfg), TAG, "Failed to initialize {sensor_type}, index {index}");
     }}
     """
 
+adcs_init_code = []
+adcs_initialized = 0
+for adc_cfg in mapping['ADC_map'].values():
+    adcs_init_code.append(generate_adc_init(adc_cfg, adcs_initialized))
+    adcs_initialized += 1
+
+adcs_init_code = '\n'.join(adcs_init_code)
+
 sensors_init_code = []
 sensors_initialized = 0
-for sensor_type, sensors in config.get('sensor_info').items():
+for sensor_type, sensors in config['sensor_info'].items():
     for sensor_cfg in sensors.values():
         sensors_init_code.append(generate_sensor_init(sensor_cfg, sensor_type, mapping, sensors_initialized))
         sensors_initialized += 1
@@ -230,6 +255,7 @@ for sensor_type, sensors in config.get('sensor_info').items():
 sensors_init_code = '\n'.join(sensors_init_code)
 
 source_content = f"""\
+#include <esp_check.h>
 #include <esp_err.h>
 #include <stdint.h>
 
@@ -242,6 +268,8 @@ source_content = f"""\
 
 #include "config_json.h"
 
+static const char *TAG = "CONFIG JSON";
+
 // Auto-generated code from esp_config.json and esp_mapping.json
 
 static ads112c04_t *s_find_adc_from_addr(ads112c04_t adcs[], size_t len_adcs, uint8_t addr) {{
@@ -251,6 +279,18 @@ static ads112c04_t *s_find_adc_from_addr(ads112c04_t adcs[], size_t len_adcs, ui
         }}
     }}
     return NULL;
+}}
+
+esp_err_t config_ads112c04s_init(ads112c04_t adcs[], size_t len_adcs, i2c_master_bus_handle_t bus_handle) {{
+    if (adcs == NULL || bus_handle == NULL) {{
+        return ESP_ERR_INVALID_ARG;
+    }}
+    if (len_adcs < CONFIG_NUM_ADCS) {{
+        return ESP_ERR_NO_MEM;
+    }}
+
+{adcs_init_code}
+    return ESP_OK;
 }}
 
 esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads112c04_t adcs[], size_t len_adcs) {{

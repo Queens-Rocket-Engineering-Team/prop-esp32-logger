@@ -12,20 +12,17 @@
 
 static const char *TAG = "SSDP";
 
-esp_err_t ssdp_discover_server(
-    int32_t *sock,
-    uint32_t *server_ip,
-    esp_netif_t *netif_handle
-) {
-
-    if (sock == NULL || netif_handle == NULL) {
+esp_err_t ssdp_discover_server(int32_t *sock, char server_ip[], size_t server_ip_len, esp_netif_t *netif_handle) {
+    if (sock == NULL || server_ip == NULL || netif_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
+    }
+    if (server_ip_len < IPADDR_STRLEN_MAX) {
+        return ESP_ERR_NO_MEM;
     }
 
     esp_err_t ret = ESP_FAIL;
     *sock = -1;
 
-    // creating client's socket
     int32_t err;
     struct addrinfo hints = {0}, *res = NULL;
     // set up UDP parameters for socket
@@ -38,10 +35,9 @@ esp_err_t ssdp_discover_server(
         ret = ESP_FAIL;
         goto cleanup;
     }
-
+    // creating client's socket
     *sock = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (*sock < 0) {
-        freeaddrinfo(res);
         ret = ESP_FAIL;
         goto cleanup;
     }
@@ -49,7 +45,6 @@ esp_err_t ssdp_discover_server(
     int enable = 1;
     err = setsockopt(*sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable);
     if (err != 0) {
-        freeaddrinfo(res);
         ret = ESP_FAIL;
         goto cleanup;
     }
@@ -57,11 +52,9 @@ esp_err_t ssdp_discover_server(
     // bind the socket to port 1900, any ip
     err = bind(*sock, res->ai_addr, res->ai_addrlen);
     if (err != 0) {
-        freeaddrinfo(res);
         ret = ESP_FAIL;
         goto cleanup;
     }
-    freeaddrinfo(res);
 
     // add membership to SSDP multicast ip
     esp_netif_ip_info_t ip_info = {0};
@@ -77,56 +70,49 @@ esp_err_t ssdp_discover_server(
         ret = ESP_FAIL;
         goto cleanup;
     }
-    err = setsockopt(
-        *sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imreq, sizeof imreq
-    );
+    err = setsockopt(*sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &imreq, sizeof imreq);
     if (err != 0) {
         ret = ESP_FAIL;
         goto cleanup;
     }
 
     // listen for SSDP M-SEARCH from server
-    struct sockaddr_in remote_addr;
+    struct sockaddr_in remote_addr = {0};
     socklen_t remote_addr_len;
-    char buf[1024];
+    static char buffer[1024];
 
     while (1) {
         remote_addr_len = sizeof remote_addr;
-        ssize_t len = recvfrom(
-            *sock,
-            buf,
-            sizeof buf - 1,
-            0,
-            (struct sockaddr *)&remote_addr,
-            &remote_addr_len
-        );
+        ssize_t len = recvfrom(*sock, buffer, sizeof buffer - 1, 0, (struct sockaddr *)&remote_addr, &remote_addr_len);
 
         if (len < 0) {
             ret = ESP_FAIL;
             goto cleanup;
         }
 
-        buf[len] = '\0'; // recvfrom does not null terminate buffer
+        buffer[len] = '\0'; // recvfrom does not null terminate buffer
 
-        ESP_LOGD(TAG, "%s", buf);
+        ESP_LOGD(TAG, "%s", buffer);
 
         // check if received data matches server SSDP request
-        if (strcasestr(buf, "M-SEARCH * HTTP/1.1") != NULL &&
-            strcasestr(buf, "HOST: 239.255.255.250:1900") != NULL &&
-            strcasestr(buf, "ST: urn:qretprop:espdevice:1") != NULL) {
+        if (strcasestr(buffer, "M-SEARCH * HTTP/1.1") != NULL &&
+            strcasestr(buffer, "HOST: 239.255.255.250:1900") != NULL &&
+            strcasestr(buffer, "ST: urn:qretprop:espdevice:1") != NULL) {
             break;
         }
     }
 
-    *server_ip = remote_addr.sin_addr.s_addr;
+    inet_ntop(remote_addr.sin_family, &remote_addr.sin_addr, server_ip, server_ip_len);
 
     ret = ESP_OK;
 
 cleanup:
+    if (res != NULL) {
+        freeaddrinfo(res);
+    }
     if (*sock != -1) {
         close(*sock);
+        *sock = -1;
     }
-    *sock = -1;
-
     return ret;
 }

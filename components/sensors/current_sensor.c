@@ -34,7 +34,7 @@ esp_err_t get_current_sensor_reading(current_sensor_t *current_sensor, float *cu
     if (current_sensor == NULL || current == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     float voltage = 0;
     ESP_RETURN_ON_ERROR(
         sensor_voltage_reading(&current_sensor->sensor, &voltage), TAG, "Failed to get current sensor voltage reading"

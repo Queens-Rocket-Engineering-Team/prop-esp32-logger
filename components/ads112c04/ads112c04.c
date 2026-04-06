@@ -1,4 +1,4 @@
-#include "driver/gpio.h"
+#include <driver/gpio.h>
 #include <driver/i2c_master.h>
 #include <esp_check.h>
 #include <esp_err.h>
@@ -12,15 +12,15 @@
 static const char *TAG = "ADS112C04";
 
 // initialize the adc on the i2c bus
-static esp_err_t s_init_i2c(ads112c04_t *ads112c04, i2c_master_bus_handle_t bus_handle) {
+static esp_err_t s_init_i2c(ads112c04_t *ads112c04, i2c_master_bus_handle_t bus_handle, uint32_t i2c_frequency) {
     if (bus_handle == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = ads112c04->address,
-        .scl_speed_hz = 100000,
+        .device_address = ads112c04->addr,
+        .scl_speed_hz = i2c_frequency,
     };
 
     // initialize device and fill dev_handle
@@ -186,11 +186,12 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     if (ads112c04 == NULL || ads112c04_cfg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    ads112c04->address = ads112c04_cfg->addr;
-    ESP_RETURN_ON_ERROR(s_init_i2c(ads112c04, ads112c04_cfg->bus_handle), TAG, "I2C init failed");
+    ads112c04->addr = ads112c04_cfg->addr;
+    ESP_RETURN_ON_ERROR(s_init_i2c(ads112c04, ads112c04_cfg->bus_handle, ads112c04_cfg->bus_frequency), TAG, "I2C init failed");
 
     // initialize conversion binary semaphore
     ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
+    configASSERT(ads112c04->xSemaphoreDRDY);
     xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0);
 
     // set up DRDY pin ISR handler
@@ -221,7 +222,7 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
 }
 
 uint8_t ads112c04_get_address(const ads112c04_t *ads112c04) {
-    return ads112c04->address;
+    return ads112c04->addr;
 }
 
 bool ads112c04_is_gain_valid(uint8_t gain) {

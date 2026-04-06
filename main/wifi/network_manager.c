@@ -1,5 +1,3 @@
-#include "config_json.h"
-#include "wifi_tools.h"
 #include <esp_err.h>
 #include <esp_event.h>
 #include <esp_log.h>
@@ -8,10 +6,130 @@
 #include <netdb.h>
 #include <sys/socket.h>
 
-#define TCP_RECV_STACK_SIZE 8192
-#define TCP_SEND_STACK_SIZE 16384
+#include "config_json.h"
+#include "wifi_tools.h"
 
-static const char *TAG = "Network Manager";
+#define TCP_SERVER_PORT 50000
+#define UDP_SERVER_PORT 50001
+
+#define NET_MANAGER_STACK_SIZE 4096
+#define TCP_RECV_STACK_SIZE 4096
+#define TCP_SEND_STACK_SIZE 4096
+#define UDP_SEND_STACK_SIZE 4096
+
+#define TCP_RECV_QUEUE_LEN 10
+#define TCP_RECV_QUEUE_ITEM_SIZE sizeof(client_payload_t)
+
+#define TCP_SEND_QUEUE_LEN 10
+#define TCP_SEND_QUEUE_ITEM_SIZE sizeof(server_payload_t)
+
+#define UDP_SEND_QUEUE_LEN 10
+#define UDP_SEND_QUEUE_ITEM_SIZE sizeof(data_packet_t)
+
+static const char *TAG = "NETWORK MANAGER";
+
+esp_err_t network_manager_init(network_ctx_t *network_ctx) {
+    if (network_ctx == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    network_ctx->server_tcp_port = TCP_SERVER_PORT;
+    network_ctx->server_udp_port = UDP_SERVER_PORT;
+    network_ctx->ssdp_sock = -1;
+    network_ctx->server_tcp_sock = -1;
+    network_ctx->server_udp_sock = -1;
+
+    // set up the recv/send message queues
+    static StaticQueue_t xStaticQueue_TCPSEND;
+    static uint8_t ucQueueStorageArea_TCPSEND[TCP_SEND_QUEUE_LEN * TCP_SEND_QUEUE_ITEM_SIZE];
+
+    network_ctx->tcp_send_queue_handle = xQueueCreateStatic(
+        TCP_SEND_QUEUE_LEN, TCP_SEND_QUEUE_ITEM_SIZE, ucQueueStorageArea_TCPSEND, &xStaticQueue_TCPSEND
+    );
+    configASSERT(network_ctx->tcp_send_queue_handle);
+
+    static StaticQueue_t xStaticQueue_TCPRECV;
+    static uint8_t ucQueueStorageArea_TCPRECV[TCP_RECV_QUEUE_LEN * TCP_RECV_QUEUE_ITEM_SIZE];
+
+    network_ctx->tcp_recv_queue_handle = xQueueCreateStatic(
+        TCP_RECV_QUEUE_LEN, TCP_RECV_QUEUE_ITEM_SIZE, ucQueueStorageArea_TCPRECV, &xStaticQueue_TCPRECV
+    );
+    configASSERT(network_ctx->tcp_recv_queue_handle);
+
+    static StaticQueue_t xStaticQueue_UDPSEND;
+    static uint8_t ucQueueStorageArea_UDPSEND[UDP_SEND_QUEUE_LEN * UDP_SEND_QUEUE_ITEM_SIZE];
+
+    network_ctx->udp_send_queue_handle = xQueueCreateStatic(
+        UDP_SEND_QUEUE_LEN, UDP_SEND_QUEUE_ITEM_SIZE, ucQueueStorageArea_UDPSEND, &xStaticQueue_UDPSEND
+    );
+    configASSERT(network_ctx->tcp_recv_queue_handle);
+
+    // set up event group for wifi connection status
+
+    static StaticEventGroup_t xEventGroup_WIFI;
+
+    network_ctx->wifi_event_group_handle = xEventGroupCreateStatic(&xEventGroup_WIFI);
+    configASSERT(network_ctx->wifi_event_group_handle);
+
+    // set up network tasks
+    static StaticTask_t xTaskBuffer_NET;
+    static StackType_t xStack_NET[NET_MANAGER_STACK_SIZE];
+
+    network_ctx->network_manager_handle = xTaskCreateStatic(
+        network_state_manager,
+        "Network Manager",
+        NET_MANAGER_STACK_SIZE,
+        (void *)network_ctx,
+        2,
+        xStack_NET,
+        &xTaskBuffer_NET
+    );
+    configASSERT(network_ctx->network_manager_handle);
+
+    static StaticTask_t xTaskBuffer_TCPRECV;
+    static StackType_t xStack_TCPRECV[TCP_RECV_STACK_SIZE];
+
+    network_ctx->tcp_recv_handle = xTaskCreateStatic(
+        tcp_client_recv,
+        "Server TCP RECV",
+        TCP_RECV_STACK_SIZE,
+        (void *)network_ctx,
+        3,
+        xStack_TCPRECV,
+        &xTaskBuffer_TCPRECV
+    );
+    configASSERT(network_ctx->tcp_recv_handle);
+
+    static StaticTask_t xTaskBuffer_TCPSEND;
+    static StackType_t xStack_TCPSEND[TCP_SEND_STACK_SIZE];
+
+    network_ctx->tcp_send_handle = xTaskCreateStatic(
+        tcp_client_send,
+        "Server TCP SEND",
+        TCP_SEND_STACK_SIZE,
+        (void *)network_ctx,
+        3,
+        xStack_TCPSEND,
+        &xTaskBuffer_TCPSEND
+    );
+    configASSERT(network_ctx->tcp_send_handle);
+
+    static StaticTask_t xTaskBuffer_UDPSEND;
+    static StackType_t xStack_UDPSEND[UDP_SEND_STACK_SIZE];
+
+    network_ctx->udp_send_handle = xTaskCreateStatic(
+        udp_client_send,
+        "Server UDP SEND",
+        UDP_SEND_STACK_SIZE,
+        (void *)network_ctx,
+        3,
+        xStack_UDPSEND,
+        &xTaskBuffer_UDPSEND
+    );
+    configASSERT(network_ctx->udp_send_handle);
+
+    return ESP_OK;
+}
 
 void network_state_manager(void *pvParams) {
     if (pvParams == NULL) {
@@ -23,108 +141,57 @@ void network_state_manager(void *pvParams) {
 
     esp_err_t err;
 
-    // create the recv/send tasks on network startup
-
-    static StaticTask_t xTaskBufferRECV;
-    static StackType_t xStackRECV[TCP_RECV_STACK_SIZE];
-
-    network_ctx->tcp_recv_handle = xTaskCreateStatic(
-        tcp_client_recv,
-        "Server RECV",
-        TCP_RECV_STACK_SIZE,
-        (void *)network_ctx,
-        3,
-        xStackRECV,
-        &xTaskBufferRECV
-    );
-
-    static StaticTask_t xTaskBufferSEND;
-    static StackType_t xStackSEND[TCP_SEND_STACK_SIZE];
-
-    network_ctx->tcp_send_handle = xTaskCreateStatic(
-        tcp_client_send,
-        "Server SEND",
-        TCP_SEND_STACK_SIZE,
-        (void *)network_ctx,
-        3,
-        xStackSEND,
-        &xTaskBufferSEND
-    );
-
     while (1) {
         xTaskNotifyWait(0, UINT32_MAX, &signal, portMAX_DELAY);
 
         if (signal & SIG_WIFI_DISCONN) {
             // reset state manager if wifi disconnects
             signal = SIG_WIFI_DISCONN;
-            xTaskNotify(
-                network_ctx->tcp_recv_handle,
-                SERVER_DISCONNECTED,
-                eSetValueWithOverwrite
-            );
-            xTaskNotify(
-                network_ctx->tcp_send_handle,
-                SERVER_DISCONNECTED,
-                eSetValueWithOverwrite
-            );
+            xEventGroupClearBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
+
             if (network_ctx->ssdp_sock != -1) {
                 close(network_ctx->ssdp_sock);
                 network_ctx->ssdp_sock = -1;
             }
-            if (network_ctx->server_sock != -1) {
-                close(network_ctx->server_sock);
-                network_ctx->server_sock = -1;
+            if (network_ctx->server_tcp_sock != -1) {
+                shutdown(network_ctx->server_tcp_sock, 0);
+                close(network_ctx->server_tcp_sock);
+                network_ctx->server_tcp_sock = -1;
+            }
+            if (network_ctx->server_udp_sock != -1) {
+                close(network_ctx->server_udp_sock);
+                network_ctx->server_udp_sock = -1;
             }
         }
         if (signal & SIG_WIFI_CONN) {
             // look for server when wifi connects
             err = ssdp_discover_server(
-                &network_ctx->ssdp_sock,
-                &network_ctx->server_ip,
-                network_ctx->netif_handle
+                &network_ctx->ssdp_sock, network_ctx->server_ip, IPADDR_STRLEN_MAX, network_ctx->netif_handle
             );
             if (err == ESP_OK) {
-                xTaskNotify(
-                    xTaskGetCurrentTaskHandle(), SIG_SSDP_GOT_SERVER, eSetBits
-                );
+                xTaskNotify(xTaskGetCurrentTaskHandle(), SIG_SSDP_GOT_SERVER, eSetBits);
             }
         }
         if (signal & SIG_SSDP_GOT_SERVER) {
             // attempt to connect to server when ip found
             err = tcp_connect_to_server(
-                &network_ctx->server_sock,
-                network_ctx->server_ip,
-                network_ctx->server_port
+                &network_ctx->server_tcp_sock, network_ctx->server_ip, network_ctx->server_tcp_port
             );
             if (err == ESP_OK) {
-                xTaskNotify(
-                    xTaskGetCurrentTaskHandle(), SIG_TCP_CONN_SERVER, eSetBits
-                );
+                xTaskNotify(xTaskGetCurrentTaskHandle(), SIG_TCP_CONN_SERVER, eSetBits);
             }
         }
         if (signal & SIG_TCP_CONN_SERVER) {
+            // create the udp socket for sending data packets
+            udp_create_socket(&network_ctx->server_udp_sock, network_ctx->server_ip, network_ctx->server_udp_port);
             // enable the recv/send tasks when connected to server
-            xTaskNotify(
-                network_ctx->tcp_recv_handle,
-                SERVER_CONNECTED,
-                eSetValueWithOverwrite
-            );
-            xTaskNotify(
-                network_ctx->tcp_send_handle,
-                SERVER_CONNECTED,
-                eSetValueWithOverwrite
-            );
+            xEventGroupSetBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
 
             // TODO take this out later, should be in main but lazy
             server_payload_t payload = {
                 .packet_type = PT_CONFIG,
                 .payload_data = {
-                    .config = {
-                        .json_config = json_config_str,
-                        .json_config_len = sizeof(json_config_str),
-                        0,
-                        0
-                    }
+                    .config = {.json_config = json_config_str, .json_config_len = sizeof(json_config_str), 0, 0}
                 }
             };
             xQueueSend(network_ctx->tcp_send_queue_handle, (void *)&payload, 0);
@@ -132,12 +199,7 @@ void network_state_manager(void *pvParams) {
     }
 }
 
-static void wifi_event_handler(
-    void *arg,
-    esp_event_base_t event_base,
-    int32_t event_id,
-    void *event_data
-) {
+static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
 
     TaskHandle_t *network_manager_task_handle = (TaskHandle_t *)arg;
 
@@ -160,17 +222,13 @@ static void wifi_event_handler(
         case IP_EVENT_STA_GOT_IP:
             ESP_LOGI(TAG, "Got IP");
             if (network_manager_task_handle != NULL) {
-                xTaskNotify(
-                    *network_manager_task_handle, SIG_WIFI_CONN, eSetBits
-                );
+                xTaskNotify(*network_manager_task_handle, SIG_WIFI_CONN, eSetBits);
             }
             break;
         case IP_EVENT_STA_LOST_IP:
             ESP_LOGI(TAG, "Lost IP");
             if (network_manager_task_handle != NULL) {
-                xTaskNotify(
-                    *network_manager_task_handle, SIG_WIFI_DISCONN, eSetBits
-                );
+                xTaskNotify(*network_manager_task_handle, SIG_WIFI_DISCONN, eSetBits);
             }
             break;
         }
@@ -181,11 +239,7 @@ esp_err_t wifi_event_handler_register(network_ctx_t *network_ctx) {
 
     esp_err_t ret;
     ret = esp_event_handler_instance_register(
-        WIFI_EVENT,
-        ESP_EVENT_ANY_ID,
-        &wifi_event_handler,
-        &network_ctx->network_manager_handle,
-        NULL
+        WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, &network_ctx->network_manager_handle, NULL
     );
 
     if (ret != ESP_OK) {
@@ -193,11 +247,7 @@ esp_err_t wifi_event_handler_register(network_ctx_t *network_ctx) {
     }
 
     ret = esp_event_handler_instance_register(
-        IP_EVENT,
-        IP_EVENT_STA_GOT_IP,
-        &wifi_event_handler,
-        &network_ctx->network_manager_handle,
-        NULL
+        IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, &network_ctx->network_manager_handle, NULL
     );
 
     return ret;

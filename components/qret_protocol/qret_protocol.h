@@ -80,6 +80,11 @@ typedef enum {
 #define ACK_DATA_SIZE 3
 #define NACK_DATA_SIZE 3
 
+#define SENSOR_DATA_SIZE 6
+#define DATA_DATA_SIZE(sensor_count) (1 + (SENSOR_DATA_SIZE * sensor_count))
+
+#define CONFIG_DATA_SIZE(config_len) (4 + config_len)
+
 #define HEADER_SIZE 9
 
 #define STATUS_PACKET_SIZE (HEADER_SIZE + STATUS_DATA_SIZE)
@@ -87,6 +92,8 @@ typedef enum {
 #define CONTROL_PACKET_SIZE (HEADER_SIZE + CONTROL_DATA_SIZE)
 #define ACK_PACKET_SIZE (HEADER_SIZE + ACK_DATA_SIZE)
 #define NACK_PACKET_SIZE (HEADER_SIZE + NACK_DATA_SIZE)
+#define DATA_PACKET_SIZE(sensor_count) (HEADER_SIZE + DATA_DATA_SIZE(sensor_count))
+#define CONFIG_PACKET_SIZE(config_len) (HEADER_SIZE + CONFIG_DATA_SIZE(config_len))
 
 typedef struct {
     uint8_t sequence;
@@ -106,11 +113,7 @@ typedef struct {
     uint32_t ts_offset;
 } status_packet_t;
 
-protocol_err_t make_status_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const status_packet_t *status
-);
+protocol_err_t make_status_packet(uint8_t packet[], size_t *packet_len, const status_packet_t *status);
 
 typedef struct {
     uint16_t stream_frequency;
@@ -131,11 +134,7 @@ typedef struct {
     uint32_t ts_offset;
 } control_packet_t;
 
-protocol_err_t make_control_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const control_packet_t *control
-);
+protocol_err_t make_control_packet(uint8_t packet[], size_t *packet_len, const control_packet_t *control);
 
 typedef struct {
     uint8_t ack_packet_type;
@@ -144,11 +143,7 @@ typedef struct {
     uint32_t ts_offset;
 } ack_packet_t;
 
-protocol_err_t make_ack_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const ack_packet_t *ack
-);
+protocol_err_t make_ack_packet(uint8_t packet[], size_t *packet_len, const ack_packet_t *ack);
 
 typedef struct {
     uint8_t nack_packet_type;
@@ -158,11 +153,7 @@ typedef struct {
     uint32_t ts_offset;
 } nack_packet_t;
 
-protocol_err_t make_nack_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const nack_packet_t *nack
-);
+protocol_err_t make_nack_packet(uint8_t packet[], size_t *packet_len, const nack_packet_t *nack);
 
 typedef struct {
     uint8_t sensor_id;
@@ -177,11 +168,7 @@ typedef struct {
     uint32_t ts_offset;
 } data_packet_t;
 
-protocol_err_t make_data_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const data_packet_t *data
-);
+protocol_err_t make_data_packet(uint8_t packet[], size_t *packet_len, const data_packet_t *data);
 
 typedef struct {
     const char *json_config;
@@ -190,17 +177,9 @@ typedef struct {
     uint32_t ts_offset;
 } config_packet_t;
 
-protocol_err_t make_config_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const config_packet_t *config
-);
+protocol_err_t make_config_packet(uint8_t packet[], size_t *packet_len, const config_packet_t *config);
 
-protocol_err_t get_packet_len(
-    const uint8_t header[],
-    size_t header_len,
-    uint16_t *data_len
-);
+protocol_err_t get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len);
 
 typedef struct {
     packet_type_t packet_type;
@@ -213,11 +192,7 @@ typedef struct {
     } payload_data;
 } server_payload_t;
 
-protocol_err_t server_parse_packet(
-    const uint8_t buffer[],
-    size_t buffer_len,
-    server_payload_t *payload
-);
+protocol_err_t server_parse_packet(const uint8_t buffer[], size_t buffer_len, server_payload_t *payload);
 
 typedef struct {
     packet_type_t packet_type;
@@ -230,8 +205,4 @@ typedef struct {
     } payload_data;
 } client_payload_t;
 
-protocol_err_t client_parse_packet(
-    const uint8_t buffer[],
-    size_t buffer_len,
-    client_payload_t *payload
-);
+protocol_err_t client_parse_packet(const uint8_t buffer[], size_t buffer_len, client_payload_t *payload);
