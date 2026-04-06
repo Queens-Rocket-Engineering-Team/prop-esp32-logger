@@ -9,40 +9,56 @@
 
 static const char *TAG = "PRESSURE TRANSDUCER";
 
-esp_err_t pressure_transducer_init(pressure_transducer_t *pt, pressure_transducer_config_t *pt_cfg) {
-    if (pt == NULL || pt_cfg == NULL) {
+esp_err_t pressure_transducer_init(
+    pressure_transducer_t *pressure_transducer,
+    const pressure_transducer_config_t *pressure_transducer_cfg
+) {
+    if (pressure_transducer == NULL || pressure_transducer_cfg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (pt_cfg->resistor < 0) {
+    if (pressure_transducer_cfg->resistor_ohms < 0) {
         return ESP_ERR_INVALID_ARG;
     }
 
     const sensor_config_t sensor_cfg = {
-        .adc = pt_cfg->adc,
-        .p_pin = pt_cfg->pin,
+        .adc = pressure_transducer_cfg->adc,
+        .p_pin = pressure_transducer_cfg->pin,
         .n_pin = ADS112C04_AVSS,
         .gain = 1,
         .pga_enabled = false,
     };
 
-    ESP_RETURN_ON_ERROR(sensor_init(&pt->sensor, &sensor_cfg), TAG, "Failed to initialize pressure transducer sensor");
+    ESP_RETURN_ON_ERROR(
+        sensor_init(&pressure_transducer->sensor, &sensor_cfg), TAG, "Failed to initialize pressure transducer sensor"
+    );
 
-    pt->resistor = pt_cfg->resistor;
-    pt->max_pressure_psi = pt_cfg->max_pressure_psi;
-    pt->unit = pt_cfg->unit;
+    pressure_transducer->resistor_ohms = pressure_transducer_cfg->resistor_ohms;
+    pressure_transducer->max_pressure_psi = pressure_transducer_cfg->max_pressure_psi;
+    pressure_transducer->unit = pressure_transducer_cfg->unit;
     return ESP_OK;
 }
 
-esp_err_t get_pressure_reading(pressure_transducer_t *pt, float *pressure_psi) {
+esp_err_t get_pressure_reading(pressure_transducer_t *pressure_transducer, float *pressure) {
+    if (pressure_transducer == NULL || pressure == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
     float voltage = 0;
     ESP_RETURN_ON_ERROR(
-        sensor_voltage_reading(&pt->sensor, &voltage), TAG, "Failed to get pressure transducer voltage reading"
+        sensor_voltage_reading(&pressure_transducer->sensor, &voltage), TAG, "Failed to get pressure transducer voltage reading"
     );
 
-    float current_mA = 1000 * voltage / pt->resistor;
+    float current_mA = 1000 * voltage / pressure_transducer->resistor_ohms;
 
     // 4-20 mA pressure transducer
-    *pressure_psi = ((current_mA - 4) / 16) * pt->max_pressure_psi;
-
+    const float psi = ((current_mA - 4) / 16) * pressure_transducer->max_pressure_psi;
+    if (pressure_transducer->unit == PRESSURE_TRANSDUCER_PSI) {
+        *pressure = psi;
+    } else if (pressure_transducer->unit == PRESSURE_TRANSDUCER_BAR) {
+        *pressure = psi * 0.0689476;
+    } else if (pressure_transducer->unit == PRESSURE_TRANSDUCER_PA) {
+        *pressure = psi * 6894.76;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
     return ESP_OK;
 }

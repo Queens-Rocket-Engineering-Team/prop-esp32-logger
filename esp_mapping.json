@@ -1,4 +1,11 @@
 {
+    "i2c_bus": {
+        "sda_pin": 9,
+        "scl_pin": 10,
+        "frequency_Hz": 100000
+    },
+    "wifi_indicator_pin": 1,
+
     "ADC_map": {
         "ADC1": {
             "addr": 64,
@@ -24,23 +31,23 @@
     "sensor_map": {
         "TC1": {
             "ADC_index": "ADC5",
-            "high_pin": 3,
-            "low_pin": 2
+            "p_pin": 3,
+            "n_pin": 2
         },
         "TC2": {
             "ADC_index": "ADC5",
-            "high_pin": 1,
-            "low_pin": 0
+            "p_pin": 1,
+            "n_pin": 0
         },
         "TC3": {
             "ADC_index": "ADC3",
-            "high_pin": 3,
-            "low_pin": 2
+            "p_pin": 3,
+            "n_pin": 2
         },
         "TC4": {
             "ADC_index": "ADC3",
-            "high_pin": 1,
-            "low_pin": 0
+            "p_pin": 1,
+            "n_pin": 0
         },
         "PT1": {
             "ADC_index": "ADC4",
@@ -68,13 +75,13 @@
         },
         "LC_THRUST": {
             "ADC_index": "ADC1",
-            "high_pin": 3,
-            "low_pin": 2
+            "p_pin": 3,
+            "n_pin": 2
         },
         "LC_FILL": {
             "ADC_index": "ADC1",
-            "high_pin": 1,
-            "low_pin": 0
+            "p_pin": 1,
+            "n_pin": 0
         },
         "IGN_RESIST_READ": {
             "ADC_index": "ADC4",

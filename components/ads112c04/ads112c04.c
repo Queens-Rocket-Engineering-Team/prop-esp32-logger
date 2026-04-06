@@ -220,6 +220,10 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     return ESP_OK;
 }
 
+uint8_t ads112c04_get_address(const ads112c04_t *ads112c04) {
+    return ads112c04->address;
+}
+
 bool ads112c04_is_gain_valid(uint8_t gain) {
     if (s_get_gain_bits(gain) == INVALID_GAIN) {
         return false;

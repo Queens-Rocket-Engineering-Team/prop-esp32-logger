@@ -5,7 +5,7 @@ idf_component_register(
     control
     ads112c04
     qret_protocol
-    esp_config
+    config_json
     esp_common
     esp_driver_i2c
     freertos

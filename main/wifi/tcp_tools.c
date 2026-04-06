@@ -1,4 +1,4 @@
-#include "esp_config_json.h"
+#include "config_json.h"
 #include "qret_protocol.h"
 #include "setup.h"
 #include "wifi_tools.h"

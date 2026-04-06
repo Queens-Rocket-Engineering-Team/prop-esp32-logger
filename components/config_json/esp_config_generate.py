@@ -1,0 +1,279 @@
+import argparse
+import orjson
+
+def read_json(file_path: str) -> tuple[dict, str]:
+    '''
+    Docstring for read_json
+    
+    :param file_path: Filepath to JSON file
+    :type file_path: str
+    :return: Dictionary of JSON objects
+    :rtype: dict
+    '''
+    try:
+        with open(file_path, 'rb') as file:
+            json_bytes = file.read()
+            json_dict = orjson.loads(json_bytes)
+            json_string = json_bytes.decode('utf-8')
+            json_string = json_string.replace(r'"', r'\"')
+            json_string = json_string.replace('\r', '')
+            json_string = json_string.replace('\n', '\\n"\n"')
+            return json_dict, json_string
+    except Exception as e:
+        print(f"Failed to read config file: {e}")   
+        raise
+    
+
+parser = argparse.ArgumentParser(description="Convert JSON config to .h header")
+parser.add_argument('config', type=str)
+parser.add_argument('mapping', type=str)
+parser.add_argument('header', type=str)
+parser.add_argument('source', type=str)
+args = parser.parse_args()
+
+config, config_str = read_json(args.config)
+mapping, _ = read_json(args.mapping)
+
+# .h file generation
+
+num_adcs = len(mapping['ADC_map'])
+num_sensors = sum(len(sensor_group) for sensor_group in config['sensor_info'].values())
+
+addr_to_drdy_cases = '\n'.join(
+    f"    case 0x{adc['addr']}:\n        return {adc['DRDY_pin']};"
+    for adc in mapping['ADC_map'].values()
+)
+
+header_content = f"""\
+#pragma once
+
+#include <esp_err.h>
+#include <stdint.h>
+
+#include "ads112c04.h"
+#include "thermocouple.h"
+#include "pressure_transducer.h"
+#include "load_cell.h"
+#include "resistance_sensor.h"
+#include "current_sensor.h"
+
+// Auto-generated header from esp_config.json and esp_mapping.json
+
+static const char json_config_str[] = "{config_str}";
+
+#define CONFIG_NUM_ADCS {num_adcs}
+#define CONFIG_NUM_SENSORS {num_sensors}
+
+typedef enum {{
+    THERMOCOUPLE,
+    PRESSURE_TRANSDUCER,
+    LOAD_CELL,
+    RESISTANCE_SENSOR,
+    CURRENT_SENSOR,
+}} config_sensor_type_t;
+
+typedef struct {{
+    config_sensor_type_t sensor_type;
+    union {{
+        thermocouple_t thermocouple;
+        pressure_transducer_t pressure_transducer;
+        load_cell_t load_cell;
+        resistance_sensor_t resistance_sensor;
+        current_sensor_t current_sensor;
+    }} sensor;
+}} config_sensor_t;
+
+esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads112c04_t adcs[], size_t len_adcs);
+
+static inline uint8_t adc_addr_to_drdy(uint8_t addr) {{
+    switch (addr) {{
+{addr_to_drdy_cases}
+    default:
+        return 0xFF;
+    }}
+}}
+
+"""
+
+try:
+    with open(args.header, 'w') as header:
+        header.write(header_content)
+        
+except Exception as e:
+    print(f"Failed to create header file: {e}")
+
+
+# .c file generation
+
+sensor_templates = {
+    'thermocouple': {
+        'type_enum': 'THERMOCOUPLE',
+        'cfg_struct_name': 'thermocouple_config_t',
+        'init_func': 'thermocouple_init',
+        'cfg_struct_fields': {
+            'p_pin': 'p_pin',
+            'n_pin': 'n_pin',
+            'unit': 'unit',
+        },
+        'unit': {
+            'c': 'THERMOCOUPLE_C',
+            'k': 'THERMOCOUPLE_K',
+            'f': 'THERMOCOUPLE_F',
+        },
+    },
+    'pressure_transducer': {
+        'type_enum': 'PRESSURE_TRANSDUCER',
+        'cfg_struct_name': 'pressure_transducer_config_t',
+        'init_func': 'pressure_transducer_init',
+        'cfg_struct_fields': {
+            'pin': 'pin',
+            'resistor_ohms': 'resistor_ohms',
+            'max_pressure_psi': 'max_pressure_PSI',
+            'unit': 'unit',
+        },
+        'unit': {
+            'psi': 'PRESSURE_TRANSDUCER_PSI',
+            'bar': 'PRESSURE_TRANSDUCER_BAR',
+            'pa': 'PRESSURE_TRANSDUCER_PA',
+        },
+    },
+    'load_cell': {
+        'type_enum': 'LOAD_CELL',
+        'cfg_struct_name': 'load_cell_config_t',
+        'init_func': 'load_cell_init',
+        'cfg_struct_fields': {
+            'p_pin': 'p_pin',
+            'n_pin': 'n_pin',
+            'load_rating_N': 'load_rating_N',
+            'excitation_V': 'excitation_V',
+            'sensitivity_vV': 'sensitivity_vV',
+            'unit': 'unit',
+        },
+        'unit': {
+            'kg': 'LOAD_CELL_KG',
+            'n': 'LOAD_CELL_N',
+        },
+    },
+    'resistance_sensor': {
+        'type_enum': 'RESISTANCE_SENSOR',
+        'cfg_struct_name': 'resistance_sensor_config_t',
+        'init_func': 'resistance_sensor_init',
+        'cfg_struct_fields': {
+            'pin': 'pin',
+            'injected_current_uA': 'injected_current_uA',
+            'r_short': 'r_short',
+            'unit': 'unit',
+        },
+        'unit': {
+            'ohms': 'RESISTANCE_SENSOR_OHMS',
+        },
+    },
+    'current_sensor': {
+        'type_enum': 'CURRENT_SENSOR',
+        'cfg_struct_name': 'current_sensor_config_t',
+        'init_func': 'current_sensor_init',
+        'cfg_struct_fields': {
+            'pin': 'pin',
+            'shunt_resistor_ohms': 'shunt_resistor_ohms',
+            'csa_gain': 'csa_gain',
+            'unit': 'unit',
+        },
+        'unit': {
+            'a': 'CURRENT_SENSOR_A',
+        },
+    },
+}
+
+def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, index: int) -> str:
+    template = sensor_templates.get(sensor_type)
+
+    pin_map = mapping['sensor_map'][sensor_cfg['sensor_index']]
+    adc_addr = mapping['ADC_map'][pin_map['ADC_index']]['addr']
+
+    cfg_struct_fields = []
+    for struct_field, json_key in template['cfg_struct_fields'].items():
+
+        val = sensor_cfg.get(json_key) or pin_map.get(json_key)
+
+        if struct_field == 'unit':
+            val = template['unit'][val.casefold()]
+
+        cfg_struct_fields.append(f'        .{struct_field} = {val},')
+
+    cfg_struct_fields_str = '\n'.join(cfg_struct_fields)
+
+    return f"""\
+    {{
+    ads112c04_t *adc = s_find_adc_from_addr(adcs, len_adcs, {adc_addr});
+    if (adc == NULL) {{
+        return ESP_ERR_NOT_FOUND;
+    }}
+
+    sensors[{index}].sensor_type = {template.get('type_enum')};
+
+    const {template.get('cfg_struct_name')} cfg = {{
+        .adc = adc,
+{cfg_struct_fields_str}
+    }};
+
+    {template.get('init_func')}(&sensors[{index}].sensor.{sensor_type}, &cfg);
+    }}
+    """
+
+sensors_init_code = []
+sensors_initialized = 0
+for sensor_type, sensors in config.get('sensor_info').items():
+    for sensor_cfg in sensors.values():
+        sensors_init_code.append(generate_sensor_init(sensor_cfg, sensor_type, mapping, sensors_initialized))
+        sensors_initialized += 1
+
+sensors_init_code = '\n'.join(sensors_init_code)
+
+source_content = f"""\
+#include <esp_err.h>
+#include <stdint.h>
+
+#include "ads112c04.h"
+#include "thermocouple.h"
+#include "pressure_transducer.h"
+#include "load_cell.h"
+#include "resistance_sensor.h"
+#include "current_sensor.h"
+
+#include "config_json.h"
+
+// Auto-generated code from esp_config.json and esp_mapping.json
+
+static ads112c04_t *s_find_adc_from_addr(ads112c04_t adcs[], size_t len_adcs, uint8_t addr) {{
+    for (size_t i = 0; i < len_adcs; i++) {{
+        if (ads112c04_get_address(&adcs[i]) == addr) {{
+                    return &adcs[i];
+        }}
+    }}
+    return NULL;
+}}
+
+esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads112c04_t adcs[], size_t len_adcs) {{
+    if (sensors == NULL || adcs == NULL) {{
+        return ESP_ERR_INVALID_ARG;
+    }}
+    if (sensors_len < CONFIG_NUM_SENSORS) {{
+        return ESP_ERR_NO_MEM;
+    }}
+
+{sensors_init_code}
+    return ESP_OK;
+}}
+"""
+
+try:
+    with open(args.source, 'w') as source:
+        source.write(source_content)
+        
+except Exception as e:
+    print(f"Failed to create source file: {e}")
+
+
+
+
+

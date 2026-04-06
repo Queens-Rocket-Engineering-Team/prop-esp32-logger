@@ -118,7 +118,7 @@ static float s_voltage_to_temperature(float voltage_mV) {
     return temperature;
 }
 
-esp_err_t thermocouple_init(thermocouple_t *thermocouple, thermocouple_config_t *thermocouple_cfg) {
+esp_err_t thermocouple_init(thermocouple_t *thermocouple, const thermocouple_config_t *thermocouple_cfg) {
     if (thermocouple == NULL || thermocouple_cfg == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -127,7 +127,7 @@ esp_err_t thermocouple_init(thermocouple_t *thermocouple, thermocouple_config_t 
         .adc = thermocouple_cfg->adc,
         .p_pin = thermocouple_cfg->p_pin,
         .n_pin = thermocouple_cfg->n_pin,
-        .gain = thermocouple_cfg->gain,
+        .gain = 64,
         .pga_enabled = true,
     };
 
@@ -154,7 +154,16 @@ esp_err_t get_thermocouple_reading(thermocouple_t *thermocouple, float *temperat
 
     const float cjc_voltage_mV = s_temperature_to_voltage(cjc_temp);
     const float thermocouple_voltage_mV = voltage * 1000 + cjc_voltage_mV;
-    *temperature = s_voltage_to_temperature(thermocouple_voltage_mV);
+    const float temp_C = s_voltage_to_temperature(thermocouple_voltage_mV);
 
+    if (thermocouple->unit == THERMOCOUPLE_C) {
+        *temperature = temp_C;
+    } else if (thermocouple->unit == THERMOCOUPLE_K) {
+        *temperature = temp_C + 273.15;
+    } else if (thermocouple->unit == THERMOCOUPLE_F) {
+        *temperature = (temp_C * 1.8) + 32;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
     return ESP_OK;
 }

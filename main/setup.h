@@ -3,7 +3,7 @@
 
 #include "ads112c04.h"
 #include "wifi_tools.h"
-#include "esp_config_json.h"
+#include "config_json.h"
 #include <driver/i2c_master.h>
 #include <esp_netif.h>
 #include <freertos/FreeRTOS.h>

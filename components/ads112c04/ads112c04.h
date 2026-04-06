@@ -37,6 +37,7 @@ typedef struct {
 
 esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads112c04_cfg);
 
+uint8_t ads112c04_get_address(const ads112c04_t *ads112c04);
 bool ads112c04_is_gain_valid(uint8_t gain);
 bool ads112c04_is_mux_valid(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin);
 

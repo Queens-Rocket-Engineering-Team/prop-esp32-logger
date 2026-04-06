@@ -1,6 +1,6 @@
 #include "setup.h"
 #include "ads112c04.h"
-#include "esp_config_json.h"
+#include "config_json.h"
 #include "wifi_tools.h"
 #include <driver/i2c_master.h>
 #include <esp_check.h>
