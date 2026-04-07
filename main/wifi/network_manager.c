@@ -194,10 +194,12 @@ void network_state_manager(void *pvParams) {
                     .config = {
                         .json_config = json_config_str,
                         .json_config_len = JSON_CONFIG_LEN,
-                        0,
-                        0,
+                        .header = {
+                            .sequence = 0,
+                            .timestamp = 0,
+                        },
                     }
-                }
+                },
             };
             xQueueSend(network_ctx->tcp_send_queue_handle, (void *)&payload, 0);
         }

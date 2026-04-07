@@ -1,9 +1,10 @@
-#pragma once
+#ifndef QRET_PROTOCOL_H
+#define QRET_PROTOCOL_H
 
 #include <stdint.h>
 
 //----------------------------------------------------------
-// enums
+// Enums
 //----------------------------------------------------------
 
 typedef enum {
@@ -109,13 +110,15 @@ typedef enum {
 #define CONFIG_PACKET_SIZE(config_len) (HEADER_SIZE + CONFIG_DATA_SIZE(config_len))
 
 //----------------------------------------------------------
-// packet structs
+// Packet structs
 //----------------------------------------------------------
 
 typedef struct {
     uint8_t sequence;
-    uint32_t ts_offset;
-} qret_header_only_packet;
+    uint32_t timestamp;
+} qret_header;
+
+typedef qret_header qret_header_only_packet;
 
 typedef struct {
     uint8_t control_id;
@@ -123,39 +126,34 @@ typedef struct {
 } qret_control_status;
 
 typedef struct {
+    qret_header header;
     qret_control_status *control_data;
     uint8_t control_count;
     uint8_t device_status;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_status_packet;
 
 typedef struct {
+    qret_header header;
     uint16_t stream_frequency;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_stream_start_packet;
 
 typedef struct {
+    qret_header header;
     uint8_t command_id;
     uint8_t command_state;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_control_packet;
 
 typedef struct {
+    qret_header header;
     uint8_t ack_packet_type;
     uint8_t ack_sequence;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_ack_packet;
 
 typedef struct {
+    qret_header header;
     uint8_t nack_packet_type;
     uint8_t nack_sequence;
     uint8_t nack_error_code;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_nack_packet;
 
 typedef struct {
@@ -165,17 +163,15 @@ typedef struct {
 } qret_sensor_data;
 
 typedef struct {
+    qret_header header;
     qret_sensor_data *sensor_data;
     uint8_t sensor_count;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_data_packet;
 
 typedef struct {
+    qret_header header;
     const char *json_config;
     uint32_t json_config_len;
-    uint8_t sequence;
-    uint32_t ts_offset;
 } qret_config_packet;
 
 typedef struct {
@@ -201,40 +197,49 @@ typedef struct {
 } qret_client_payload;
 
 //----------------------------------------------------------
-// packet struct to raw bytes
+// Packet structs to raw bytes:
+// Takes a pointer to a packet struct, and
+// fills buffer with the encoded packet.
+// packet_len should be a pointer to the length
+// of buffer, which will update to the length of
+// the packet in buffer
 //----------------------------------------------------------
 
-qret_protocol_ret make_header_only_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    qret_packet_type packet_type,
-    const qret_header_only_packet *header_only
-);
+qret_protocol_ret make_header_only_packet(uint8_t buffer[], size_t *packet_len, qret_packet_type packet_type, const qret_header_only_packet *header_only);
 
-qret_protocol_ret make_status_packet(uint8_t packet[], size_t *packet_len, const qret_status_packet *status);
+qret_protocol_ret make_stream_start_packet(uint8_t buffer[], size_t *packet_len, const qret_stream_start_packet *stream_start);
 
-qret_protocol_ret make_stream_start_packet(
-    uint8_t packet[],
-    size_t *packet_len,
-    const qret_stream_start_packet *stream_start
-);
+qret_protocol_ret make_control_packet(uint8_t buffer[], size_t *packet_len, const qret_control_packet *control);
 
-qret_protocol_ret make_control_packet(uint8_t packet[], size_t *packet_len, const qret_control_packet *control);
+qret_protocol_ret make_ack_packet(uint8_t buffer[], size_t *packet_len, const qret_ack_packet *ack);
 
-qret_protocol_ret make_ack_packet(uint8_t packet[], size_t *packet_len, const qret_ack_packet *ack);
+qret_protocol_ret make_nack_packet(uint8_t buffer[], size_t *packet_len, const qret_nack_packet *nack);
 
-qret_protocol_ret make_nack_packet(uint8_t packet[], size_t *packet_len, const qret_nack_packet *nack);
+// Status, data, and config packet structs include pointers to a variable length array.
+// When these functions are called, the data at that address must still be intact
 
-qret_protocol_ret make_data_packet(uint8_t packet[], size_t *packet_len, const qret_data_packet *data);
+qret_protocol_ret make_status_packet(uint8_t buffer[], size_t *packet_len, const qret_status_packet *status);
 
-qret_protocol_ret make_config_packet(uint8_t packet[], size_t *packet_len, const qret_config_packet *config);
+qret_protocol_ret make_data_packet(uint8_t buffer[], size_t *packet_len, const qret_data_packet *data);
+
+qret_protocol_ret make_config_packet(uint8_t buffer[], size_t *packet_len, const qret_config_packet *config);
 
 //----------------------------------------------------------
-// raw bytes to packet struct
+// Raw bytes to packet struct:
+// server_parse_packet should be used server-side,
+// and client_parse_packet should be used client-side.
+// Takes an encoded packet in buffer and decodes into
+// payload, as a tagged union.
 //----------------------------------------------------------
 
-qret_protocol_ret get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len);
+qret_protocol_ret get_packet_len(const uint8_t buffer[], size_t buffer_len, uint16_t *data_len);
+
+// When recieving variable length packets such as a config packet, you must immediately
+// memcpy the packet and null terminate into your own string, as the packet contains a
+// pointer to the config string in the buffer
 
 qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len, qret_server_payload *payload);
 
 qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len, qret_client_payload *payload);
+
+#endif

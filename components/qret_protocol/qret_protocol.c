@@ -14,48 +14,48 @@ typedef struct {
     uint32_t timestamp;
 } qret_protocol_header;
 
-static qret_protocol_ret s_pack_header(uint8_t header[], size_t header_len, const qret_protocol_header *header_data) {
-    if (header == NULL || header_data == NULL) {
+static qret_protocol_ret s_pack_header(uint8_t buffer[], size_t header_len, const qret_protocol_header *header_data) {
+    if (buffer == NULL || header_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (header_len != HEADER_SIZE) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
 
-    header[0] = header_data->protocol_version;
-    header[1] = header_data->packet_type;
-    header[2] = header_data->sequence;
+    buffer[0] = header_data->protocol_version;
+    buffer[1] = header_data->packet_type;
+    buffer[2] = header_data->sequence;
 
-    header[3] = (uint8_t)(header_data->data_length >> 8);
-    header[4] = (uint8_t)header_data->data_length;
+    buffer[3] = (uint8_t)(header_data->data_length >> 8);
+    buffer[4] = (uint8_t)header_data->data_length;
 
-    header[5] = (uint8_t)(header_data->timestamp >> 24);
-    header[6] = (uint8_t)(header_data->timestamp >> 16);
-    header[7] = (uint8_t)(header_data->timestamp >> 8);
-    header[8] = (uint8_t)header_data->timestamp;
+    buffer[5] = (uint8_t)(header_data->timestamp >> 24);
+    buffer[6] = (uint8_t)(header_data->timestamp >> 16);
+    buffer[7] = (uint8_t)(header_data->timestamp >> 8);
+    buffer[8] = (uint8_t)header_data->timestamp;
 
     return PROTOCOL_OK;
 }
 
-static qret_protocol_ret s_unpack_header(const uint8_t header[], size_t header_len, qret_protocol_header *header_data) {
-    if (header == NULL || header_data == NULL) {
+static qret_protocol_ret s_unpack_header(const uint8_t buffer[], size_t header_len, qret_protocol_header *header_data) {
+    if (buffer == NULL || header_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (header_len != HEADER_SIZE) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
-    if (header[0] != QRET_PROTOCOL_VERSION) {
+    if (buffer[0] != QRET_PROTOCOL_VERSION) {
         return PROTOCOL_VERSION_MISMATCH_ERR;
     }
 
-    header_data->protocol_version = header[0];
-    header_data->packet_type = header[1];
-    header_data->sequence = header[2];
+    header_data->protocol_version = buffer[0];
+    header_data->packet_type = buffer[1];
+    header_data->sequence = buffer[2];
 
-    header_data->data_length = ((uint16_t)header[3] << 8) | ((uint16_t)header[4]);
+    header_data->data_length = ((uint16_t)buffer[3] << 8) | ((uint16_t)buffer[4]);
 
-    header_data->timestamp = ((uint32_t)header[5] << 24) | ((uint32_t)header[6] << 16) | ((uint32_t)header[7] << 8) |
-                             ((uint32_t)header[8]);
+    header_data->timestamp = ((uint32_t)buffer[5] << 24) | ((uint32_t)buffer[6] << 16) | ((uint32_t)buffer[7] << 8) |
+                             ((uint32_t)buffer[8]);
 
     return PROTOCOL_OK;
 }
@@ -76,12 +76,12 @@ static inline bool _is_packet_header_only(qret_packet_type packet_type) {
 }
 
 qret_protocol_ret make_header_only_packet(
-    uint8_t packet[],
+    uint8_t buffer[],
     size_t *packet_len,
     qret_packet_type packet_type,
     const qret_header_only_packet *header_only
 ) {
-    if (packet == NULL || packet_len == NULL || header_only == NULL) {
+    if (buffer == NULL || packet_len == NULL || header_only == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (!_is_packet_header_only(packet_type)) {
@@ -99,10 +99,10 @@ qret_protocol_ret make_header_only_packet(
         .packet_type = packet_type,
         .sequence = header_only->sequence,
         .data_length = HEADER_SIZE,
-        .timestamp = header_only->ts_offset,
+        .timestamp = header_only->timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
@@ -110,11 +110,11 @@ qret_protocol_ret make_header_only_packet(
 }
 
 qret_protocol_ret make_stream_start_packet(
-    uint8_t packet[],
+    uint8_t buffer[],
     size_t *packet_len,
     const qret_stream_start_packet *stream_start
 ) {
-    if (packet == NULL || packet_len == NULL || stream_start == NULL) {
+    if (buffer == NULL || packet_len == NULL || stream_start == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < STREAM_START_PACKET_SIZE) {
@@ -127,25 +127,25 @@ qret_protocol_ret make_stream_start_packet(
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_STREAM_START,
-        .sequence = stream_start->sequence,
+        .sequence = stream_start->header.sequence,
         .data_length = STREAM_START_PACKET_SIZE,
-        .timestamp = stream_start->ts_offset,
+        .timestamp = stream_start->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = (uint8_t)(stream_start->stream_frequency >> 8);
-    packet[HEADER_SIZE + 1] = (uint8_t)stream_start->stream_frequency;
+    buffer[HEADER_SIZE + 0] = (uint8_t)(stream_start->stream_frequency >> 8);
+    buffer[HEADER_SIZE + 1] = (uint8_t)stream_start->stream_frequency;
 
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_control_packet(uint8_t packet[], size_t *packet_len, const qret_control_packet *control) {
+qret_protocol_ret make_control_packet(uint8_t buffer[], size_t *packet_len, const qret_control_packet *control) {
 
-    if (packet == NULL) {
+    if (buffer == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < CONTROL_PACKET_SIZE) {
@@ -158,25 +158,25 @@ qret_protocol_ret make_control_packet(uint8_t packet[], size_t *packet_len, cons
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_CONTROL,
-        .sequence = control->sequence,
+        .sequence = control->header.sequence,
         .data_length = CONTROL_PACKET_SIZE,
-        .timestamp = control->ts_offset,
+        .timestamp = control->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = control->command_id;
-    packet[HEADER_SIZE + 1] = control->command_state;
+    buffer[HEADER_SIZE + 0] = control->command_id;
+    buffer[HEADER_SIZE + 1] = control->command_state;
 
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_ack_packet(uint8_t packet[], size_t *packet_len, const qret_ack_packet *ack) {
+qret_protocol_ret make_ack_packet(uint8_t buffer[], size_t *packet_len, const qret_ack_packet *ack) {
 
-    if (packet == NULL || packet_len == NULL || ack == NULL) {
+    if (buffer == NULL || packet_len == NULL || ack == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < ACK_PACKET_SIZE) {
@@ -189,26 +189,26 @@ qret_protocol_ret make_ack_packet(uint8_t packet[], size_t *packet_len, const qr
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_ACK,
-        .sequence = ack->sequence,
+        .sequence = ack->header.sequence,
         .data_length = ACK_PACKET_SIZE,
-        .timestamp = ack->ts_offset,
+        .timestamp = ack->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = ack->ack_packet_type;
-    packet[HEADER_SIZE + 1] = ack->ack_sequence;
-    packet[HEADER_SIZE + 2] = ERR_NONE;
+    buffer[HEADER_SIZE + 0] = ack->ack_packet_type;
+    buffer[HEADER_SIZE + 1] = ack->ack_sequence;
+    buffer[HEADER_SIZE + 2] = ERR_NONE;
 
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_nack_packet(uint8_t packet[], size_t *packet_len, const qret_nack_packet *nack) {
+qret_protocol_ret make_nack_packet(uint8_t buffer[], size_t *packet_len, const qret_nack_packet *nack) {
 
-    if (packet == NULL || packet_len == NULL || nack == NULL) {
+    if (buffer == NULL || packet_len == NULL || nack == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < NACK_PACKET_SIZE) {
@@ -221,26 +221,26 @@ qret_protocol_ret make_nack_packet(uint8_t packet[], size_t *packet_len, const q
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_NACK,
-        .sequence = nack->sequence,
+        .sequence = nack->header.sequence,
         .data_length = NACK_PACKET_SIZE,
-        .timestamp = nack->ts_offset,
+        .timestamp = nack->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = nack->nack_packet_type;
-    packet[HEADER_SIZE + 1] = nack->nack_sequence;
-    packet[HEADER_SIZE + 2] = nack->nack_error_code;
+    buffer[HEADER_SIZE + 0] = nack->nack_packet_type;
+    buffer[HEADER_SIZE + 1] = nack->nack_sequence;
+    buffer[HEADER_SIZE + 2] = nack->nack_error_code;
 
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_status_packet(uint8_t packet[], size_t *packet_len, const qret_status_packet *status) {
+qret_protocol_ret make_status_packet(uint8_t buffer[], size_t *packet_len, const qret_status_packet *status) {
 
-    if (packet == NULL || packet_len == NULL || status == NULL || status->control_data == NULL) {
+    if (buffer == NULL || packet_len == NULL || status == NULL || status->control_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < STATUS_PACKET_SIZE(status->control_count)) {
@@ -253,30 +253,30 @@ qret_protocol_ret make_status_packet(uint8_t packet[], size_t *packet_len, const
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_STATUS,
-        .sequence = status->sequence,
+        .sequence = status->header.sequence,
         .data_length = STATUS_PACKET_SIZE(status->control_count),
-        .timestamp = status->ts_offset,
+        .timestamp = status->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = status->device_status;
-    packet[HEADER_SIZE + 1] = status->control_count;
+    buffer[HEADER_SIZE + 0] = status->device_status;
+    buffer[HEADER_SIZE + 1] = status->control_count;
 
     for (size_t i = 0; i < status->control_count; i++) {
         size_t offset = STATUS_PACKET_SIZE(i);
-        packet[offset + 0] = status->control_data[i].control_id;
-        packet[offset + 1] = status->control_data[i].control_state;
+        buffer[offset + 0] = status->control_data[i].control_id;
+        buffer[offset + 1] = status->control_data[i].control_state;
     }
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_data_packet(uint8_t packet[], size_t *packet_len, const qret_data_packet *data) {
+qret_protocol_ret make_data_packet(uint8_t buffer[], size_t *packet_len, const qret_data_packet *data) {
 
-    if (packet == NULL || packet_len == NULL || data == NULL || data->sensor_data == NULL) {
+    if (buffer == NULL || packet_len == NULL || data == NULL || data->sensor_data == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < DATA_PACKET_SIZE(data->sensor_count)) {
@@ -289,36 +289,36 @@ qret_protocol_ret make_data_packet(uint8_t packet[], size_t *packet_len, const q
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_DATA,
-        .sequence = data->sequence,
+        .sequence = data->header.sequence,
         .data_length = DATA_PACKET_SIZE(data->sensor_count),
-        .timestamp = data->ts_offset,
+        .timestamp = data->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = data->sensor_count;
+    buffer[HEADER_SIZE + 0] = data->sensor_count;
 
     for (size_t i = 0; i < data->sensor_count; i++) {
         size_t offset = DATA_PACKET_SIZE(i);
-        packet[offset + 0] = data->sensor_data[i].sensor_id;
-        packet[offset + 1] = data->sensor_data[i].unit;
+        buffer[offset + 0] = data->sensor_data[i].sensor_id;
+        buffer[offset + 1] = data->sensor_data[i].unit;
         // Float to bytes
         uint32_t value_bytes;
         memcpy(&value_bytes, &data->sensor_data[i].value, sizeof(uint32_t));
-        packet[offset + 2] = (uint8_t)(value_bytes >> 24);
-        packet[offset + 3] = (uint8_t)(value_bytes >> 16);
-        packet[offset + 4] = (uint8_t)(value_bytes >> 8);
-        packet[offset + 5] = (uint8_t)(value_bytes);
+        buffer[offset + 2] = (uint8_t)(value_bytes >> 24);
+        buffer[offset + 3] = (uint8_t)(value_bytes >> 16);
+        buffer[offset + 4] = (uint8_t)(value_bytes >> 8);
+        buffer[offset + 5] = (uint8_t)(value_bytes);
     }
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret make_config_packet(uint8_t packet[], size_t *packet_len, const qret_config_packet *config) {
+qret_protocol_ret make_config_packet(uint8_t buffer[], size_t *packet_len, const qret_config_packet *config) {
 
-    if (packet == NULL || packet_len == NULL || config == NULL || config->json_config == NULL) {
+    if (buffer == NULL || packet_len == NULL || config == NULL || config->json_config == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
     uint32_t packet_data_len = config->json_config_len;
@@ -335,38 +335,38 @@ qret_protocol_ret make_config_packet(uint8_t packet[], size_t *packet_len, const
     const qret_protocol_header header_data = {
         .protocol_version = QRET_PROTOCOL_VERSION,
         .packet_type = PT_CONFIG,
-        .sequence = config->sequence,
+        .sequence = config->header.sequence,
         .data_length = HEADER_SIZE + (4 + packet_data_len),
-        .timestamp = config->ts_offset,
+        .timestamp = config->header.timestamp,
     };
 
-    err = s_pack_header(packet, HEADER_SIZE, &header_data);
+    err = s_pack_header(buffer, HEADER_SIZE, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
 
-    packet[HEADER_SIZE + 0] = (uint8_t)(packet_data_len >> 24);
-    packet[HEADER_SIZE + 1] = (uint8_t)(packet_data_len >> 16);
-    packet[HEADER_SIZE + 2] = (uint8_t)(packet_data_len >> 8);
-    packet[HEADER_SIZE + 3] = (uint8_t)packet_data_len;
+    buffer[HEADER_SIZE + 0] = (uint8_t)(packet_data_len >> 24);
+    buffer[HEADER_SIZE + 1] = (uint8_t)(packet_data_len >> 16);
+    buffer[HEADER_SIZE + 2] = (uint8_t)(packet_data_len >> 8);
+    buffer[HEADER_SIZE + 3] = (uint8_t)packet_data_len;
 
-    memcpy(packet + (HEADER_SIZE + 4), config->json_config, packet_data_len);
+    memcpy(buffer + (HEADER_SIZE + 4), config->json_config, packet_data_len);
 
     return PROTOCOL_OK;
 }
 
-qret_protocol_ret get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len) {
-    if (header == NULL || data_len == NULL) {
+qret_protocol_ret get_packet_len(const uint8_t buffer[], size_t buffer_len, uint16_t *data_len) {
+    if (buffer == NULL || data_len == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
-    if (header_len < HEADER_SIZE) {
+    if (buffer_len < HEADER_SIZE) {
         return PROTOCOL_ARRAY_LEN_ERR;
     }
 
     qret_protocol_ret err;
     qret_protocol_header header_data = {0};
 
-    err = s_unpack_header(header, header_len, &header_data);
+    err = s_unpack_header(buffer, buffer_len, &header_data);
     if (err != PROTOCOL_OK) {
         return err;
     }
@@ -408,8 +408,8 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         }
         payload->payload_data.ack.ack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.ack.ack_sequence = buffer[HEADER_SIZE + 1];
-        payload->payload_data.ack.sequence = header_data.sequence;
-        payload->payload_data.ack.ts_offset = header_data.timestamp;
+        payload->payload_data.ack.header.sequence = header_data.sequence;
+        payload->payload_data.ack.header.timestamp = header_data.timestamp;
         break;
     case PT_NACK:
         if (header_data.data_length != NACK_PACKET_SIZE) {
@@ -418,8 +418,8 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         payload->payload_data.nack.nack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.nack.nack_sequence = buffer[HEADER_SIZE + 1];
         payload->payload_data.nack.nack_error_code = buffer[HEADER_SIZE + 2];
-        payload->payload_data.nack.sequence = header_data.sequence;
-        payload->payload_data.nack.ts_offset = header_data.timestamp;
+        payload->payload_data.nack.header.sequence = header_data.sequence;
+        payload->payload_data.nack.header.timestamp = header_data.timestamp;
         break;
     case PT_STATUS:
         uint8_t control_count = buffer[HEADER_SIZE + 1];
@@ -434,8 +434,8 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
             payload->payload_data.status.control_data[i].control_id = buffer[offset + 0];
             payload->payload_data.status.control_data[i].control_state = buffer[offset + 1];
         }
-        payload->payload_data.status.sequence = header_data.sequence;
-        payload->payload_data.status.ts_offset = header_data.timestamp;
+        payload->payload_data.status.header.sequence = header_data.sequence;
+        payload->payload_data.status.header.timestamp = header_data.timestamp;
         break;
     case PT_DATA:
         uint8_t sensor_count = buffer[HEADER_SIZE + 0];
@@ -453,8 +453,8 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
                                    (uint32_t)(buffer[offset + 4] << 8) | (uint32_t)(buffer[offset + 5]);
             memcpy(&payload->payload_data.data.sensor_data[i].value, &value_bytes, sizeof(uint32_t));
         }
-        payload->payload_data.data.sequence = header_data.sequence;
-        payload->payload_data.data.ts_offset = header_data.timestamp;
+        payload->payload_data.data.header.sequence = header_data.sequence;
+        payload->payload_data.data.header.timestamp = header_data.timestamp;
         break;
     case PT_CONFIG:
         uint32_t data_len = (uint32_t)(buffer[HEADER_SIZE + 0] << 24) | (uint32_t)(buffer[HEADER_SIZE + 1] << 16) |
@@ -509,7 +509,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
             return PROTOCOL_ARRAY_LEN_ERR;
         }
         payload->payload_data.header_only.sequence = header_data.sequence;
-        payload->payload_data.header_only.ts_offset = header_data.timestamp;
+        payload->payload_data.header_only.timestamp = header_data.timestamp;
         break;
     case PT_STREAM_START:
         if (header_data.data_length != STREAM_START_PACKET_SIZE) {
@@ -517,8 +517,8 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         }
         payload->payload_data.stream_start.stream_frequency = ((uint16_t)buffer[HEADER_SIZE + 0] << 8) |
                                                               (uint16_t)buffer[HEADER_SIZE + 1];
-        payload->payload_data.stream_start.sequence = header_data.sequence;
-        payload->payload_data.stream_start.ts_offset = header_data.timestamp;
+        payload->payload_data.stream_start.header.sequence = header_data.sequence;
+        payload->payload_data.stream_start.header.timestamp = header_data.timestamp;
         break;
     case PT_CONTROL:
         if (header_data.data_length != CONTROL_PACKET_SIZE) {
@@ -526,8 +526,8 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         }
         payload->payload_data.control.command_id = buffer[HEADER_SIZE + 0];
         payload->payload_data.control.command_state = buffer[HEADER_SIZE + 1];
-        payload->payload_data.control.sequence = header_data.sequence;
-        payload->payload_data.control.ts_offset = header_data.timestamp;
+        payload->payload_data.control.header.sequence = header_data.sequence;
+        payload->payload_data.control.header.timestamp = header_data.timestamp;
         break;
     case PT_ACK:
         if (header_data.data_length != ACK_PACKET_SIZE) {
@@ -538,8 +538,8 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         }
         payload->payload_data.ack.ack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.ack.ack_sequence = buffer[HEADER_SIZE + 1];
-        payload->payload_data.ack.sequence = header_data.sequence;
-        payload->payload_data.ack.ts_offset = header_data.timestamp;
+        payload->payload_data.ack.header.sequence = header_data.sequence;
+        payload->payload_data.ack.header.timestamp = header_data.timestamp;
         break;
     case PT_NACK:
         if (header_data.data_length != NACK_PACKET_SIZE) {
@@ -548,8 +548,8 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         payload->payload_data.nack.nack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.nack.nack_sequence = buffer[HEADER_SIZE + 1];
         payload->payload_data.nack.nack_error_code = buffer[HEADER_SIZE + 2];
-        payload->payload_data.nack.sequence = header_data.sequence;
-        payload->payload_data.nack.ts_offset = header_data.timestamp;
+        payload->payload_data.nack.header.sequence = header_data.sequence;
+        payload->payload_data.nack.header.timestamp = header_data.timestamp;
         break;
     default:
         return PROTOCOL_INVALID_PACKET_TYPE;

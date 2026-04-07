@@ -122,14 +122,18 @@ void sensor_stream(void *pvParams) {
             }
         }
 
+        const uint32_t timestamp = app_ctx->ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
         taskENTER_CRITICAL(&app_ctx->sequence_spinlock);
+        const uint16_t sequence = ++app_ctx->sequence;
+        taskEXIT_CRITICAL(&app_ctx->sequence_spinlock);
         qret_data_packet data_packet = {
             .sensor_data = data,
             .sensor_count = CONFIG_NUM_SENSORS,
-            .sequence = ++app_ctx->sequence,
-            .ts_offset = app_ctx->ts_offset + (uint32_t)(esp_timer_get_time() / 1000),
+            .header = {
+                       .sequence = sequence,
+                       .timestamp = timestamp,
+                       },
         };
-        taskEXIT_CRITICAL(&app_ctx->sequence_spinlock);
 
         xQueueSend(app_ctx->network_ctx->udp_send_queue_handle, (void *)&data_packet, MESSAGE_QUEUE_TIMEOUT);
 

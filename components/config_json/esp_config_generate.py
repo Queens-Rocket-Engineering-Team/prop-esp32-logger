@@ -2,14 +2,6 @@ import argparse
 import json
 
 def read_json(file_path: str) -> tuple[dict, str]:
-    '''
-    Docstring for read_json
-    
-    :param file_path: Filepath to JSON file
-    :type file_path: str
-    :return: Dictionary of JSON objects
-    :rtype: dict
-    '''
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             json_dict = json.load(file)

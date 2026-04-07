@@ -49,17 +49,21 @@ void app_main(void) {
             continue;
 
         case PT_TIMESYNC: {
-            app_ctx.ts_offset = payload_in.payload_data.header_only.ts_offset - (uint32_t)(esp_timer_get_time() / 1000);
+            app_ctx.ts_offset = payload_in.payload_data.header_only.timestamp - (uint32_t)(esp_timer_get_time() / 1000);
             payload_out.packet_type = PT_ACK;
+
             const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
             taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+            const uint16_t sequence = ++app_ctx.sequence;
+            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             const qret_ack_packet ack = {
                 .ack_packet_type = PT_TIMESYNC,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .sequence = ++app_ctx.sequence,
-                .ts_offset = timestamp,
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = timestamp,
+                           },
             };
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             payload_out.payload_data.ack = ack;
         } break;
 
@@ -77,32 +81,40 @@ void app_main(void) {
             } else {
                 nack_error_code = ERR_INVALID_PARAM;
             }
-            
+
             ESP_ERROR_CHECK_WITHOUT_ABORT(err);
             if (err == ESP_OK) {
                 payload_out.packet_type = PT_ACK;
+
                 const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+                const uint16_t sequence = ++app_ctx.sequence;
+                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
                 const qret_ack_packet ack = {
                     .ack_packet_type = PT_CONTROL,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
-                    .sequence = ++app_ctx.sequence,
-                    .ts_offset = timestamp,
+                    .header = {
+                               .sequence = sequence,
+                               .timestamp = timestamp,
+                               },
                 };
-                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
                 payload_out.payload_data.ack = ack;
             } else {
                 payload_out.packet_type = PT_NACK;
+
                 const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+                const uint16_t sequence = ++app_ctx.sequence;
+                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
                 const qret_nack_packet nack = {
                     .nack_packet_type = PT_CONTROL,
                     .nack_sequence = payload_in.payload_data.header_only.sequence,
-                    .sequence = ++app_ctx.sequence,
-                    .ts_offset = timestamp,
-                    .nack_error_code = nack_error_code
+                    .nack_error_code = nack_error_code,
+                    .header = {
+                               .sequence = sequence,
+                               .timestamp = timestamp,
+                               },
                 };
-                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
                 payload_out.payload_data.nack = nack;
             }
         } break;
@@ -116,17 +128,20 @@ void app_main(void) {
             }
 
             payload_out.packet_type = PT_STATUS;
+
             const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
             taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+            const uint16_t sequence = ++app_ctx.sequence;
+            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             const qret_status_packet status = {
                 .control_data = control_status,
                 .control_count = CONFIG_NUM_CONTROLS,
                 .device_status = DS_ACTIVE,
-                .sequence = ++app_ctx.sequence,
-                .ts_offset = timestamp,
-
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = timestamp,
+                           },
             };
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             payload_out.payload_data.status = status;
         } break;
 
@@ -140,34 +155,40 @@ void app_main(void) {
             // notify the stream task to start
             xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
             ESP_LOGI(TAG, "Sensor stream started");
-
             payload_out.packet_type = PT_ACK;
+
             const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
             taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+            const uint16_t sequence = ++app_ctx.sequence;
+            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             const qret_ack_packet ack = {
                 .ack_packet_type = PT_STREAM_START,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .sequence = ++app_ctx.sequence,
-                .ts_offset = timestamp,
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = timestamp,
+                           },
             };
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             payload_out.payload_data.ack = ack;
         } break;
 
         case PT_STREAM_STOP: {
             xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
             ESP_LOGI(TAG, "Sensor stream stopped");
-
             payload_out.packet_type = PT_ACK;
+
             const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
             taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+            const uint16_t sequence = ++app_ctx.sequence;
+            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             const qret_ack_packet ack = {
                 .ack_packet_type = PT_STREAM_STOP,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .sequence = ++app_ctx.sequence,
-                .ts_offset = timestamp,
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = timestamp,
+                           },
             };
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             payload_out.payload_data.ack = ack;
         } break;
 
@@ -180,15 +201,19 @@ void app_main(void) {
 
         case PT_HEARTBEAT: {
             payload_out.packet_type = PT_ACK;
+
             const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
             taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
+            const uint16_t sequence = ++app_ctx.sequence;
+            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             const qret_ack_packet ack = {
                 .ack_packet_type = PT_HEARTBEAT,
                 .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .sequence = ++app_ctx.sequence,
-                .ts_offset = timestamp,
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = timestamp,
+                           },
             };
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
             payload_out.payload_data.ack = ack;
         } break;
 
