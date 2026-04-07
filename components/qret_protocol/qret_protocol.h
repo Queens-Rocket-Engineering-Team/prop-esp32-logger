@@ -110,27 +110,31 @@ typedef enum {
 #define CONFIG_PACKET_SIZE(config_len) (HEADER_SIZE + CONFIG_DATA_SIZE(config_len))
 
 //----------------------------------------------------------
-// Packet structs
+// Packet info structs
 //----------------------------------------------------------
 
+// Generic header struct
 typedef struct {
     uint8_t sequence;
     uint32_t timestamp;
 } qret_header;
 
-typedef qret_header qret_header_only_packet;
-
+// Struct for variable-length control status data in status packet
 typedef struct {
     uint8_t control_id;
     uint8_t control_state;
 } qret_control_status;
 
+// Struct for variable-length sensor data in data packet
 typedef struct {
-    qret_header header;
-    qret_control_status *control_data;
-    uint8_t control_count;
-    uint8_t device_status;
-} qret_status_packet;
+    uint8_t sensor_id;
+    uint8_t unit;
+    float value;
+} qret_sensor_data;
+
+// Packet structs
+
+typedef qret_header qret_header_only_packet;
 
 typedef struct {
     qret_header header;
@@ -157,10 +161,11 @@ typedef struct {
 } qret_nack_packet;
 
 typedef struct {
-    uint8_t sensor_id;
-    uint8_t unit;
-    float value;
-} qret_sensor_data;
+    qret_header header;
+    qret_control_status *control_data;
+    uint8_t control_count;
+    uint8_t device_status;
+} qret_status_packet;
 
 typedef struct {
     qret_header header;
@@ -173,6 +178,8 @@ typedef struct {
     const char *json_config;
     uint32_t json_config_len;
 } qret_config_packet;
+
+// Payload tagged unions
 
 typedef struct {
     qret_packet_type packet_type;
@@ -207,13 +214,13 @@ typedef struct {
 
 qret_protocol_ret make_header_only_packet(uint8_t buffer[], size_t *packet_len, qret_packet_type packet_type, const qret_header_only_packet *header_only);
 
-qret_protocol_ret make_stream_start_packet(uint8_t buffer[], size_t *packet_len, const qret_stream_start_packet *stream_start);
-
-qret_protocol_ret make_control_packet(uint8_t buffer[], size_t *packet_len, const qret_control_packet *control);
-
 qret_protocol_ret make_ack_packet(uint8_t buffer[], size_t *packet_len, const qret_ack_packet *ack);
 
 qret_protocol_ret make_nack_packet(uint8_t buffer[], size_t *packet_len, const qret_nack_packet *nack);
+
+qret_protocol_ret make_stream_start_packet(uint8_t buffer[], size_t *packet_len, const qret_stream_start_packet *stream_start);
+
+qret_protocol_ret make_control_packet(uint8_t buffer[], size_t *packet_len, const qret_control_packet *control);
 
 // Status, data, and config packet structs include pointers to a variable length array.
 // When these functions are called, the data at that address must still be intact

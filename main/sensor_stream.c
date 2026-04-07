@@ -41,7 +41,6 @@ void sensor_stream(void *pvParams) {
             }
         }
 
-
         static qret_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 
         for (size_t i = 0; i < CONFIG_NUM_SENSORS; i++) {
