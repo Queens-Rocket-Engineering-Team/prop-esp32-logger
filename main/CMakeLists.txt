@@ -4,8 +4,8 @@ idf_component_register(
     REQUIRES
     control
     ads112c04
-    qret_protocol
     config_json
+    qret_protocol
     esp_common
     esp_driver_i2c
     esp_driver_gpio

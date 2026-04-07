@@ -92,7 +92,6 @@
             "pin": 2
         }
     },
-
     "control_map": {
         "AV_FILL": {
             "pin": 38

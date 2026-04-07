@@ -156,14 +156,14 @@ static uint8_t s_get_mux_code(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin) {
 
 // convert rdata bits to voltage
 static float s_bits_to_voltage(ads112c04_t *ads112c04, int16_t raw_data) {
-    float voltage = (float)raw_data * (ads112c04->ref_voltage / 32768) / ads112c04->gain; // 16 bit ADC
+    float voltage = (raw_data * ads112c04->ref_voltage) / (32768.0f * ads112c04->gain); // 16 bit ADC
     return voltage;
 }
 
 // convert rdata bits to temperature
 static float s_bits_to_temperature(int16_t raw_data) {
     raw_data = raw_data >> 2;                 // 14 bit left-aligned reading
-    float temperature = (float)raw_data / 32; // Divide for temp resolution
+    float temperature = raw_data / 32.0f; // Divide for temp resolution
     return temperature;
 }
 
@@ -221,6 +221,7 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 1, reg1), TAG, "Failed to write reg1");
 
     // set default ADC settings
+    ads112c04->ref_voltage = 5; // give the ability to set this in config later
     ads112c04->gain = 1;
     ads112c04->pga_enabled = false;
     ads112c04->conversion_mode = CM_SINGLE_SHOT;
@@ -352,7 +353,7 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
 
     int16_t raw_data = 0;
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
-    ESP_RETURN_ON_ERROR(s_disable_internal_temperature(ads112c04), TAG, "Failed to disnable internal temperature sensor");
+    ESP_RETURN_ON_ERROR(s_disable_internal_temperature(ads112c04), TAG, "Failed to disable internal temperature sensor");
 
     *temperature = s_bits_to_temperature(raw_data);
     return ESP_OK;

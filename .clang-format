@@ -5,18 +5,19 @@ ColumnLimit: 120
 
 PointerAlignment: Right
 BreakBeforeBraces: Attach
+AlignAfterOpenBracket: BlockIndent
 
 AllowShortIfStatementsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
+AllowShortEnumsOnASingleLine: false
 
 BinPackParameters: false
 BinPackArguments: false
 AllowAllParametersOfDeclarationOnNextLine: false
-AlignAfterOpenBracket: BlockIndent
 AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
 
 PenaltyReturnTypeOnItsOwnLine: 1000
 PenaltyBreakAssignment: 1000
-AllowShortEnumsOnASingleLine: false
+
 AlignArrayOfStructures: Left

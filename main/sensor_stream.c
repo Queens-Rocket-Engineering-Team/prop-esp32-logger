@@ -37,10 +37,10 @@ void sensor_stream(void *pvParams) {
         if (xTaskNotifyWait(0, 0, &new_frequency, 0) == pdTRUE) {
             if (new_frequency != 0) {
                 frequency = (uint16_t)new_frequency;
+                ESP_LOGI(TAG, "Stream frequency: %u", frequency);
             }
         }
 
-        ESP_LOGI(TAG, "Stream frequency: %u", frequency);
 
         static qret_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 

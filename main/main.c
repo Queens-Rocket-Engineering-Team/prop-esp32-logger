@@ -2,17 +2,9 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
-#include <freertos/timers.h>
-#include <netdb.h>
-#include <stdio.h>
 
-#include "ads112c04.h"
-#include "current_sensor.h"
-#include "load_cell.h"
-#include "pressure_transducer.h"
-#include "resistance_sensor.h"
-#include "thermocouple.h"
-
+#include "config_json.h"
+#include "control.h"
 #include "qret_protocol.h"
 #include "sensor_stream.h"
 #include "setup.h"
@@ -124,7 +116,17 @@ void app_main(void) {
 
             for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                 control_status[i].control_id = i;
-                control_status[i].control_state = control_get_state(&app_ctx.controls[i]);
+                const control_state_t control_internal_state = control_get_state(&app_ctx.controls[i]);
+                switch (control_internal_state) {
+                case CONTROL_OPEN:
+                    control_status[i].control_state = CS_OPEN;
+                    break;
+                case CONTROL_CLOSED:
+                    control_status[i].control_state = CS_CLOSED;
+                    break;
+                case CONTROL_UNKNOWN:
+                    control_status[i].control_state = CS_ERROR;
+                };
             }
 
             payload_out.packet_type = PT_STATUS;
