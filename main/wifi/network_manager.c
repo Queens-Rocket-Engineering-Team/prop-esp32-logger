@@ -62,7 +62,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
     network_ctx->udp_send_queue_handle = xQueueCreateStatic(
         UDP_SEND_QUEUE_LEN, UDP_SEND_QUEUE_ITEM_SIZE, ucQueueStorageArea_UDPSEND, &xStaticQueue_UDPSEND
     );
-    configASSERT(network_ctx->tcp_recv_queue_handle);
+    configASSERT(network_ctx->udp_send_queue_handle);
 
     // set up event group for wifi connection status
 
@@ -80,7 +80,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         "Network Manager",
         NET_MANAGER_STACK_SIZE,
         (void *)network_ctx,
-        1,
+        2,
         xStack_NET,
         &xTaskBuffer_NET
     );
@@ -146,7 +146,6 @@ void network_state_manager(void *pvParams) {
 
         if (signal & SIG_WIFI_DISCONN) {
             // reset state manager if wifi disconnects
-            signal = SIG_WIFI_DISCONN;
             xEventGroupClearBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
 
             if (network_ctx->ssdp_sock != -1) {
@@ -162,6 +161,7 @@ void network_state_manager(void *pvParams) {
                 close(network_ctx->server_udp_sock);
                 network_ctx->server_udp_sock = -1;
             }
+            continue;
         }
         if (signal & SIG_WIFI_CONN) {
             // look for server when wifi connects
@@ -217,6 +217,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TAG, "Disconnected from AP");
+            xTaskNotify(*network_manager_task_handle, SIG_WIFI_DISCONN, eSetBits);
             esp_wifi_connect(); // TODO add retry counter
             break;
         case WIFI_EVENT_STA_CONNECTED:

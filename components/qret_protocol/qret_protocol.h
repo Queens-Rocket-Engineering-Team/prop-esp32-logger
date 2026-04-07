@@ -69,7 +69,7 @@ typedef enum {
     UNIT_HERTZ = 0x0E,
     UNIT_OHMS = 0x0F,
     UNIT_UNITLESS = 0xFF,
-} qret_unit;
+} qret_units;
 
 typedef enum {
     // Packet error codes
@@ -83,7 +83,7 @@ typedef enum {
 } qret_packet_err;
 
 //----------------------------------------------------------
-// data sizes
+// Packet sizes
 //----------------------------------------------------------
 
 #define STREAM_START_DATA_SIZE 2
@@ -234,9 +234,9 @@ qret_protocol_ret make_config_packet(uint8_t buffer[], size_t *packet_len, const
 
 qret_protocol_ret get_packet_len(const uint8_t buffer[], size_t buffer_len, uint16_t *data_len);
 
-// When recieving variable length packets such as a config packet, you must immediately
-// memcpy the packet and null terminate into your own string, as the packet contains a
-// pointer to the config string in the buffer
+// When recieving a config packet, you must immediately
+// memcpy the packet and null terminate into your own string, as the packet
+// contains a pointer to the config string in the buffer
 
 qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len, qret_server_payload *payload);
 
