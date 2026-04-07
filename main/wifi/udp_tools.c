@@ -69,6 +69,8 @@ void udp_client_send(void *pvParams) {
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
     static data_packet_t data_packet;
 
+    qret_protocol_ret_t ret = PROTOCOL_OK;
+
     while (1) {
         // only pause when server is disconnected
         xEventGroupWaitBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
@@ -81,13 +83,16 @@ void udp_client_send(void *pvParams) {
         size_t packet_len = sizeof(tx_buffer);
 
         // convert packet struct to bytes
-        make_data_packet(tx_buffer, &packet_len, &data_packet);
+        ret = make_data_packet(tx_buffer, &packet_len, &data_packet);
+        if (ret != PROTOCOL_OK) {
+            ESP_LOGE(TAG, "QRET protocol err:", ret);
+        }
 
         int32_t len_sent = send(network_ctx->server_udp_sock, tx_buffer, packet_len, 0);
         if (len_sent < 0) {
             ESP_LOGE(TAG, "send failed: errno %d", errno);
             continue;
         }
-        ESP_LOGI(TAG, "Outgoing packet len: %d", len_sent);
+        ESP_LOGD(TAG, "Outgoing packet len: %d", len_sent);
     }
 }

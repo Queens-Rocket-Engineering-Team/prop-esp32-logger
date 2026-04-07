@@ -30,7 +30,7 @@ esp_err_t current_sensor_init(current_sensor_t *current_sensor, const current_se
     return ESP_OK;
 }
 
-esp_err_t get_current_sensor_reading(current_sensor_t *current_sensor, float *current) {
+esp_err_t get_current_reading(current_sensor_t *current_sensor, float *current) {
     if (current_sensor == NULL || current == NULL) {
         return ESP_ERR_INVALID_ARG;
     }

@@ -14,7 +14,7 @@ def read_json(file_path: str) -> tuple[dict, str]:
         with open(file_path, 'rb') as file:
             json_bytes = file.read()
             json_dict = orjson.loads(json_bytes)
-            json_str = orjson.dumps(json_dict).decode('utf-8').replace(r'"', r'\"')
+            json_str = orjson.dumps(json_dict).decode('utf-8')
             return json_dict, json_str
     except Exception as e:
         print(f"Failed to read config file: {e}")   
@@ -56,7 +56,8 @@ header_content = f"""\
 
 // Auto-generated header from esp_config.json and esp_mapping.json
 
-static const char json_config_str[] = "{config_str}";
+extern const char json_config_str[];
+#define JSON_CONFIG_LEN {len(config_str)}
 
 #define CONFIG_NUM_ADCS {num_adcs}
 #define CONFIG_NUM_SENSORS {num_sensors}
@@ -271,6 +272,8 @@ source_content = f"""\
 static const char *TAG = "CONFIG JSON";
 
 // Auto-generated code from esp_config.json and esp_mapping.json
+
+const char json_config_str[] = "{config_str.replace(r'"', r'\"')}";
 
 static ads112c04_t *s_find_adc_from_addr(ads112c04_t adcs[], size_t len_adcs, uint8_t addr) {{
     for (size_t i = 0; i < len_adcs; i++) {{

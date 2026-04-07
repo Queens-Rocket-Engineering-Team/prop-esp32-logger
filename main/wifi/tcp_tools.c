@@ -76,46 +76,52 @@ void tcp_client_recv(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     static uint8_t rx_buffer[RX_BUFFER_LEN] = {0};
-    static uint16_t packet_data_len = 0;
+    static uint16_t packet_len = 0;
     static client_payload_t payload = {0};
+
+    qret_protocol_ret_t ret = PROTOCOL_OK;
 
     while (1) {
         // only pause when server is disconnected
         xEventGroupWaitBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
         // get the full header from a packet
-        int32_t len = recv(network_ctx->server_tcp_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL);
-        if (len < 0) {
+        int32_t header_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL);
+        if (header_len_recv < 0) {
             ESP_LOGE(TAG, "recv failed: errno %d", errno);
             continue;
-        } else if (len == 0) {
+        } else if (header_len_recv == 0) {
             ESP_LOGI(TAG, "Connection closed by server gracefully");
             continue;
         }
 
-        get_packet_len(rx_buffer, HEADER_SIZE, &packet_data_len);
+        get_packet_len(rx_buffer, HEADER_SIZE, &packet_len);
+        int32_t data_len_recv = 0;
 
-        if (packet_data_len > 0) {
-            if (packet_data_len > sizeof(rx_buffer) - HEADER_SIZE) {
-                ESP_LOGE(TAG, "rx_buffer ran out of space: packet len %d", packet_data_len);
+        if (packet_len - HEADER_SIZE > 0) {
+            if (packet_len > sizeof(rx_buffer) - HEADER_SIZE) {
+                ESP_LOGE(TAG, "rx_buffer ran out of space: packet len %d", packet_len);
                 break;
             }
             // recieve the rest of the packet if not header only
-            len = recv(network_ctx->server_tcp_sock, rx_buffer + HEADER_SIZE, packet_data_len, MSG_WAITALL);
-            if (len < 0) {
+            data_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer + HEADER_SIZE, packet_len, MSG_WAITALL);
+            if (data_len_recv < 0) {
                 ESP_LOGE(TAG, "recv failed: errno %d", errno);
                 continue;
-            } else if (len == 0) {
+            } else if (data_len_recv == 0) {
                 ESP_LOGI(TAG, "Connection closed by server gracefully");
                 continue;
             }
         }
 
-        ESP_LOGD(TAG, "Received %d bytes from server:", len);
-        ESP_LOG_BUFFER_HEXDUMP(TAG, rx_buffer, len, ESP_LOG_DEBUG);
+        ESP_LOGD(TAG, "Received %d bytes from server:", header_len_recv + data_len_recv);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, rx_buffer, header_len_recv + data_len_recv, ESP_LOG_DEBUG);
 
         // parse and send packet data for processing
-        client_parse_packet(rx_buffer, sizeof(rx_buffer), &payload);
+        ret = client_parse_packet(rx_buffer, sizeof(rx_buffer), &payload);
+        if (ret != PROTOCOL_OK) {
+            ESP_LOGE(TAG, "QRET protocol err:", ret);
+        }
         xQueueSend(network_ctx->tcp_recv_queue_handle, (void *)&payload, 0);
     }
 }
@@ -125,6 +131,8 @@ void tcp_client_send(void *pvParams) {
 
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
     static server_payload_t payload = {0};
+
+    qret_protocol_ret_t ret = PROTOCOL_OK;
 
     while (1) {
         // only pause when server is disconnected
@@ -140,7 +148,7 @@ void tcp_client_send(void *pvParams) {
         // convert packet struct to bytes depending on type
         switch (payload.packet_type) {
         case PT_CONFIG:
-            make_config_packet(tx_buffer, &packet_len, &payload.payload_data.config);
+            ret = make_config_packet(tx_buffer, &packet_len, &payload.payload_data.config);
             break;
         case PT_DATA:
             make_data_packet(tx_buffer, &packet_len, &payload.payload_data.data);
@@ -158,12 +166,16 @@ void tcp_client_send(void *pvParams) {
             ESP_LOGE(TAG, "Attempted to send invalid server packet");
             continue;
         }
+        if (ret != PROTOCOL_OK) {
+            ESP_LOGE(TAG, "QRET protocol err:", ret);
+        }
 
         int32_t len_sent = send(network_ctx->server_tcp_sock, tx_buffer, packet_len, 0);
         if (len_sent < 0) {
             ESP_LOGE(TAG, "send failed: errno %d", errno);
             continue;
         }
-        ESP_LOGI(TAG, "Outgoing packet len: %d", len_sent);
+        ESP_LOGD(TAG, "Outgoing packet len: %d", len_sent);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, tx_buffer, len_sent, ESP_LOG_DEBUG);
     }
 }

@@ -8,6 +8,14 @@
 
 #include "qret_protocol.h"
 
+enum {
+    SIG_WIFI_DISCONN = (1 << 0),
+    SIG_WIFI_CONN = (1 << 1),
+    SIG_SSDP_GOT_SERVER = (1 << 2),
+    SIG_TCP_CONN_SERVER = (1 << 3),
+    SIG_TCP_RECV = (1 << 4),
+};
+
 typedef struct {
     esp_netif_t *netif_handle;
     char server_ip[IPADDR_STRLEN_MAX];
@@ -25,14 +33,6 @@ typedef struct {
     TaskHandle_t tcp_send_handle;
     TaskHandle_t udp_send_handle;
 } network_ctx_t;
-
-enum {
-    SIG_WIFI_DISCONN = (1 << 0),
-    SIG_WIFI_CONN = (1 << 1),
-    SIG_SSDP_GOT_SERVER = (1 << 2),
-    SIG_TCP_CONN_SERVER = (1 << 3),
-    SIG_TCP_RECV = (1 << 4),
-};
 
 #define WIFI_CONNECTED_BIT 1
 

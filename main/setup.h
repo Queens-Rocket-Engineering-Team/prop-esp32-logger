@@ -12,8 +12,10 @@ typedef struct {
     network_ctx_t *network_ctx;
     ads112c04_t adcs[CONFIG_NUM_ADCS];
     config_sensor_t sensors[CONFIG_NUM_SENSORS];
-    uint32_t ts_offset;
-    uint8_t sequence;
+    EventGroupHandle_t sensor_stream_event_group_handle;
+    TaskHandle_t sensor_stream_handle;
+    volatile uint32_t ts_offset;
+    volatile uint8_t sequence;
     portMUX_TYPE sequence_spinlock;
     i2c_master_bus_handle_t bus_handle;
 } app_ctx_t;

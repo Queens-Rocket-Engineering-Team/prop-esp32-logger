@@ -19,7 +19,7 @@ esp_err_t load_cell_init(load_cell_t *load_cell, const load_cell_config_t *load_
         .p_pin = load_cell_cfg->p_pin,
         .n_pin = load_cell_cfg->n_pin,
         .gain = 128,
-        .pga_enabled = false,
+        .pga_enabled = true,
     };
 
     ESP_RETURN_ON_ERROR(sensor_init(&load_cell->sensor, &sensor_cfg), TAG, "Failed to initialize load cell sensor");

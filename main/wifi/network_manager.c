@@ -80,7 +80,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         "Network Manager",
         NET_MANAGER_STACK_SIZE,
         (void *)network_ctx,
-        2,
+        1,
         xStack_NET,
         &xTaskBuffer_NET
     );
@@ -94,7 +94,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         "Server TCP RECV",
         TCP_RECV_STACK_SIZE,
         (void *)network_ctx,
-        3,
+        1,
         xStack_TCPRECV,
         &xTaskBuffer_TCPRECV
     );
@@ -108,7 +108,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         "Server TCP SEND",
         TCP_SEND_STACK_SIZE,
         (void *)network_ctx,
-        3,
+        1,
         xStack_TCPSEND,
         &xTaskBuffer_TCPSEND
     );
@@ -122,7 +122,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         "Server UDP SEND",
         UDP_SEND_STACK_SIZE,
         (void *)network_ctx,
-        3,
+        1,
         xStack_UDPSEND,
         &xTaskBuffer_UDPSEND
     );
@@ -191,7 +191,12 @@ void network_state_manager(void *pvParams) {
             server_payload_t payload = {
                 .packet_type = PT_CONFIG,
                 .payload_data = {
-                    .config = {.json_config = json_config_str, .json_config_len = sizeof(json_config_str), 0, 0}
+                    .config = {
+                        .json_config = json_config_str,
+                        .json_config_len = JSON_CONFIG_LEN,
+                        0,
+                        0,
+                    }
                 }
             };
             xQueueSend(network_ctx->tcp_send_queue_handle, (void *)&payload, 0);

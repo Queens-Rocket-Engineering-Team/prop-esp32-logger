@@ -1,3 +1,4 @@
+#include <driver/gpio.h>
 #include <driver/i2c_master.h>
 #include <esp_check.h>
 #include <esp_err.h>
@@ -6,6 +7,7 @@
 
 #include "ads112c04.h"
 #include "config_json.h"
+#include "sensor_stream.h"
 #include "setup.h"
 #include "wifi_tools.h"
 
@@ -70,7 +72,10 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
     // initialize i2c master
     ESP_RETURN_ON_ERROR(i2c_new_master_bus(&i2c_mst_config, &app_ctx->bus_handle), TAG, "Failed to create I2C bus");
 
-    // set up devices on bus
+    // install isr service for adcs
+    ESP_RETURN_ON_ERROR(gpio_install_isr_service(ESP_INTR_FLAG_IRAM), TAG, "Failed to install ISR service");
+
+    // set up adcs on i2c bus
     ESP_RETURN_ON_ERROR(
         config_ads112c04s_init(app_ctx->adcs, CONFIG_NUM_ADCS, app_ctx->bus_handle), TAG, "Failed to initialize ADCs"
     );
@@ -86,6 +91,27 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
         "Failed to initialize sensors"
     );
 
+    // set up sensor stream event group
+    static StaticEventGroup_t xEventGroup_SENSORSTREAM;
+
+    app_ctx->sensor_stream_event_group_handle = xEventGroupCreateStatic(&xEventGroup_SENSORSTREAM);
+    configASSERT(app_ctx->sensor_stream_event_group_handle);
+
+    // set up sensor stream task
+    static StaticTask_t xTaskBuffer_SENSORSTREAM;
+    static StackType_t xStack_SENSORSTREAM[SENSOR_STREAM_STACK_SIZE];
+
+    app_ctx->sensor_stream_handle = xTaskCreateStatic(
+        sensor_stream,
+        "Sensor Stream",
+        SENSOR_STREAM_STACK_SIZE,
+        (void *)app_ctx,
+        1,
+        xStack_SENSORSTREAM,
+        &xTaskBuffer_SENSORSTREAM
+    );
+    configASSERT(app_ctx->sensor_stream_handle);
+    
     app_ctx->sequence_spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     app_ctx->sequence = 0;
     app_ctx->ts_offset = 0;

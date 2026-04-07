@@ -2,6 +2,10 @@
 
 #include <stdint.h>
 
+//----------------------------------------------------------
+// enums
+//----------------------------------------------------------
+
 typedef enum {
     // Return error codes
     PROTOCOL_OK,
@@ -9,38 +13,7 @@ typedef enum {
     PROTOCOL_NULL_PTR_ERR,
     PROTOCOL_INVALID_PACKET_TYPE,
     PROTOCOL_VERSION_MISMATCH_ERR,
-} protocol_err_t;
-
-typedef enum {
-    UNIT_VOLTS = 0x00,
-    UNIT_AMPS = 0x01,
-    UNIT_CELSIUS = 0x02,
-    UNIT_FAHRENHEIT = 0x03,
-    UNIT_KELVIN = 0x04,
-    UNIT_PSI = 0x05,
-    UNIT_BAR = 0x06,
-    UNIT_PASCAL = 0x07,
-    UNIT_GRAMS = 0x08,
-    UNIT_KILOGRAMS = 0x09,
-    UNIT_POUNDS = 0x0A,
-    UNIT_NEWTONS = 0x0B,
-    UNIT_SECONDS = 0x0C,
-    UNIT_MILLISECONDS = 0x0D,
-    UNIT_HERTZ = 0x0E,
-    UNIT_OHMS = 0x0F,
-    UNIT_UNITLESS = 0xFF
-} protocol_unit_t;
-
-typedef enum {
-    // Packet error codes
-    ERR_NONE = 0x00,
-    ERR_UNKNOWN_TYPE = 0x01,
-    ERR_INVALID_ID = 0x02,
-    ERR_HARDWARE_FAULT = 0x03,
-    ERR_BUSY = 0x04,
-    ERR_NOT_STREAMING = 0x05,
-    ERR_INVALID_PARAM = 0x06,
-} packet_err_t;
+} qret_protocol_ret_t;
 
 typedef enum {
     // Server -> Device
@@ -60,20 +33,58 @@ typedef enum {
     // All
     PT_ACK = 0x13,
     PT_NACK = 0x14,
-} packet_type_t;
+} qret_packet_type_t;
 
-// Device status
-#define DS_INACTIVE 0x00
-#define DS_ACTIVE 0x01
-#define DS_ERROR 0x02
-#define DS_CALIBRATING 0x03
+typedef enum {
+    // Device status
+    DS_INACTIVE = 0x00,
+    DS_ACTIVE = 0x01,
+    DS_ERROR = 0x02,
+    DS_CALIBRATING = 0x03,
+} qret_device_status_t;
 
-// Control state
-#define CS_CLOSED 0x00
-#define CS_OPEN 0x01
-#define CS_ERROR 0xFF
+typedef enum {
+    // Control state
+    CS_CLOSED = 0x00,
+    CS_OPEN = 0x01,
+    CS_ERROR = 0xFF,
+} qret_control_state_t;
 
-// Data sizes
+typedef enum {
+    UNIT_VOLTS = 0x00,
+    UNIT_AMPS = 0x01,
+    UNIT_CELSIUS = 0x02,
+    UNIT_FAHRENHEIT = 0x03,
+    UNIT_KELVIN = 0x04,
+    UNIT_PSI = 0x05,
+    UNIT_BAR = 0x06,
+    UNIT_PASCAL = 0x07,
+    UNIT_GRAMS = 0x08,
+    UNIT_KILOGRAMS = 0x09,
+    UNIT_POUNDS = 0x0A,
+    UNIT_NEWTONS = 0x0B,
+    UNIT_SECONDS = 0x0C,
+    UNIT_MILLISECONDS = 0x0D,
+    UNIT_HERTZ = 0x0E,
+    UNIT_OHMS = 0x0F,
+    UNIT_UNITLESS = 0xFF,
+} qret_unit_t;
+
+typedef enum {
+    // Packet error codes
+    ERR_NONE = 0x00,
+    ERR_UNKNOWN_TYPE = 0x01,
+    ERR_INVALID_ID = 0x02,
+    ERR_HARDWARE_FAULT = 0x03,
+    ERR_BUSY = 0x04,
+    ERR_NOT_STREAMING = 0x05,
+    ERR_INVALID_PARAM = 0x06,
+} qret_packet_err_t;
+
+//----------------------------------------------------------
+// data sizes
+//----------------------------------------------------------
+
 #define STATUS_DATA_SIZE 1
 #define STREAM_START_DATA_SIZE 2
 #define CONTROL_DATA_SIZE 2
@@ -95,15 +106,19 @@ typedef enum {
 #define DATA_PACKET_SIZE(sensor_count) (HEADER_SIZE + DATA_DATA_SIZE(sensor_count))
 #define CONFIG_PACKET_SIZE(config_len) (HEADER_SIZE + CONFIG_DATA_SIZE(config_len))
 
+//----------------------------------------------------------
+// packet struct to raw bytes
+//----------------------------------------------------------
+
 typedef struct {
     uint8_t sequence;
     uint32_t ts_offset;
 } header_only_packet_t;
 
-protocol_err_t make_header_only_packet(
+qret_protocol_ret_t make_header_only_packet(
     uint8_t packet[],
     size_t *packet_len,
-    packet_type_t packet_type,
+    qret_packet_type_t packet_type,
     const header_only_packet_t *header_only
 );
 
@@ -113,7 +128,7 @@ typedef struct {
     uint32_t ts_offset;
 } status_packet_t;
 
-protocol_err_t make_status_packet(uint8_t packet[], size_t *packet_len, const status_packet_t *status);
+qret_protocol_ret_t make_status_packet(uint8_t packet[], size_t *packet_len, const status_packet_t *status);
 
 typedef struct {
     uint16_t stream_frequency;
@@ -121,7 +136,7 @@ typedef struct {
     uint32_t ts_offset;
 } stream_start_packet_t;
 
-protocol_err_t make_stream_start_packet(
+qret_protocol_ret_t make_stream_start_packet(
     uint8_t packet[],
     size_t *packet_len,
     const stream_start_packet_t *stream_start
@@ -134,7 +149,7 @@ typedef struct {
     uint32_t ts_offset;
 } control_packet_t;
 
-protocol_err_t make_control_packet(uint8_t packet[], size_t *packet_len, const control_packet_t *control);
+qret_protocol_ret_t make_control_packet(uint8_t packet[], size_t *packet_len, const control_packet_t *control);
 
 typedef struct {
     uint8_t ack_packet_type;
@@ -143,7 +158,7 @@ typedef struct {
     uint32_t ts_offset;
 } ack_packet_t;
 
-protocol_err_t make_ack_packet(uint8_t packet[], size_t *packet_len, const ack_packet_t *ack);
+qret_protocol_ret_t make_ack_packet(uint8_t packet[], size_t *packet_len, const ack_packet_t *ack);
 
 typedef struct {
     uint8_t nack_packet_type;
@@ -153,22 +168,22 @@ typedef struct {
     uint32_t ts_offset;
 } nack_packet_t;
 
-protocol_err_t make_nack_packet(uint8_t packet[], size_t *packet_len, const nack_packet_t *nack);
+qret_protocol_ret_t make_nack_packet(uint8_t packet[], size_t *packet_len, const nack_packet_t *nack);
 
 typedef struct {
     uint8_t sensor_id;
     uint8_t unit;
     float value;
-} protocol_sensor_data_t;
+} qret_sensor_data_t;
 
 typedef struct {
-    protocol_sensor_data_t *sensor_data;
+    qret_sensor_data_t *sensor_data;
     uint8_t sensor_count;
     uint8_t sequence;
     uint32_t ts_offset;
 } data_packet_t;
 
-protocol_err_t make_data_packet(uint8_t packet[], size_t *packet_len, const data_packet_t *data);
+qret_protocol_ret_t make_data_packet(uint8_t packet[], size_t *packet_len, const data_packet_t *data);
 
 typedef struct {
     const char *json_config;
@@ -177,12 +192,16 @@ typedef struct {
     uint32_t ts_offset;
 } config_packet_t;
 
-protocol_err_t make_config_packet(uint8_t packet[], size_t *packet_len, const config_packet_t *config);
+qret_protocol_ret_t make_config_packet(uint8_t packet[], size_t *packet_len, const config_packet_t *config);
 
-protocol_err_t get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len);
+//----------------------------------------------------------
+// raw bytes to packet struct
+//----------------------------------------------------------
+
+qret_protocol_ret_t get_packet_len(const uint8_t header[], size_t header_len, uint16_t *data_len);
 
 typedef struct {
-    packet_type_t packet_type;
+    qret_packet_type_t packet_type;
     union {
         config_packet_t config;
         data_packet_t data;
@@ -192,10 +211,10 @@ typedef struct {
     } payload_data;
 } server_payload_t;
 
-protocol_err_t server_parse_packet(const uint8_t buffer[], size_t buffer_len, server_payload_t *payload);
+qret_protocol_ret_t server_parse_packet(const uint8_t buffer[], size_t buffer_len, server_payload_t *payload);
 
 typedef struct {
-    packet_type_t packet_type;
+    qret_packet_type_t packet_type;
     union {
         header_only_packet_t header_only;
         control_packet_t control;
@@ -205,4 +224,4 @@ typedef struct {
     } payload_data;
 } client_payload_t;
 
-protocol_err_t client_parse_packet(const uint8_t buffer[], size_t buffer_len, client_payload_t *payload);
+qret_protocol_ret_t client_parse_packet(const uint8_t buffer[], size_t buffer_len, client_payload_t *payload);

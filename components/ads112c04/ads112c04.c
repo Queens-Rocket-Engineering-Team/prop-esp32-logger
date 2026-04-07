@@ -43,7 +43,7 @@ static esp_err_t s_send_command(ads112c04_t *ads112c04, uint8_t cmd) {
 
 // retrieve conversion from adc
 static esp_err_t s_read_data(ads112c04_t *ads112c04, int16_t *data) {
-    uint8_t rdata_cmd = RDATA;
+    const uint8_t rdata_cmd = RDATA;
     uint8_t data_bytes[2] = {0};
 
     ESP_RETURN_ON_ERROR(
@@ -68,8 +68,7 @@ static esp_err_t s_write_register(ads112c04_t *ads112c04, uint8_t reg, uint8_t w
         return ESP_ERR_INVALID_ARG;
     }
 
-    uint8_t wreg_cmd = WREG(reg);
-    uint8_t wreg[] = {wreg_cmd, write_byte};
+    const uint8_t wreg[] = {WREG(reg), write_byte};
 
     ESP_RETURN_ON_ERROR(
         i2c_master_transmit(ads112c04->dev_handle, wreg, 2, ADS112C04_I2C_TIMEOUT), TAG, "Failed to send WREG"
@@ -89,7 +88,7 @@ static esp_err_t s_read_register(ads112c04_t *ads112c04, uint8_t reg, uint8_t *r
         return ESP_ERR_INVALID_ARG;
     }
 
-    uint8_t rreg_cmd = RREG(reg);
+    const uint8_t rreg_cmd = RREG(reg);
 
     ESP_RETURN_ON_ERROR(
         i2c_master_transmit_receive(ads112c04->dev_handle, &rreg_cmd, 1, reg_byte, 1, ADS112C04_I2C_TIMEOUT),
@@ -192,7 +191,6 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     // initialize conversion binary semaphore
     ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
     configASSERT(ads112c04->xSemaphoreDRDY);
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0);
 
     // set up DRDY pin ISR handler
     gpio_config_t io_conf = {
@@ -204,15 +202,21 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     };
     ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config for DRDY failed");
 
-    esp_err_t err = gpio_install_isr_service(ESP_INTR_FLAG_IRAM);
-    if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) { // ESP_ERR_INVALID_STATE if already installed
-        ESP_LOGE(TAG, "GPIO ISR service install failed");
-        return err;
-    }
-
     ESP_RETURN_ON_ERROR(
         gpio_isr_handler_add(ads112c04_cfg->drdy_pin, drdy_isr_handler, (void *)ads112c04), TAG, "Failed to add GPIO to ISR handler"
     );
+
+    s_send_command(ads112c04, RESET);
+    vTaskDelay(pdTICKS_TO_MS(5));
+
+    // set default configuration values
+    uint8_t reg1 = 0;
+    reg1 |= (0x06 << 5) & DR_MASK; // set to 1000SPS
+    reg1 |= (0x01 << 4) & MODE_MASK;
+    reg1 |= (0x00 << 3) & CM_MASK; // set to single shot mode
+    reg1 |= (0x02 << 1) & VREF_MASK; // set ref voltage to AVDD-AVSS
+    reg1 |= 0x00 & TS_MASK; // disable temperature sensor mode
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 1, reg1), TAG, "Failed to write reg1");
 
     // set default ADC settings
     ads112c04->gain = 1;
@@ -346,6 +350,7 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
 
     int16_t raw_data = 0;
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
+    ESP_RETURN_ON_ERROR(s_disable_internal_temperature(ads112c04), TAG, "Failed to disnable internal temperature sensor");
 
     *temperature = s_bits_to_temperature(raw_data);
     return ESP_OK;
