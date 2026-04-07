@@ -1,5 +1,5 @@
 import argparse
-import orjson
+import json
 
 def read_json(file_path: str) -> tuple[dict, str]:
     '''
@@ -11,10 +11,9 @@ def read_json(file_path: str) -> tuple[dict, str]:
     :rtype: dict
     '''
     try:
-        with open(file_path, 'rb') as file:
-            json_bytes = file.read()
-            json_dict = orjson.loads(json_bytes)
-            json_str = orjson.dumps(json_dict).decode('utf-8')
+        with open(file_path, 'r', encoding='utf-8') as file:
+            json_dict = json.load(file)
+            json_str = json.dumps(json_dict, separators=(',',':'))
             return json_dict, json_str
     except Exception as e:
         print(f"Failed to read config file: {e}")   
