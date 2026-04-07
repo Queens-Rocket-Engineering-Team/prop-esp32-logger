@@ -18,13 +18,13 @@
 #define UDP_SEND_STACK_SIZE 4096
 
 #define TCP_RECV_QUEUE_LEN 10
-#define TCP_RECV_QUEUE_ITEM_SIZE sizeof(client_payload_t)
+#define TCP_RECV_QUEUE_ITEM_SIZE sizeof(qret_client_payload)
 
 #define TCP_SEND_QUEUE_LEN 10
-#define TCP_SEND_QUEUE_ITEM_SIZE sizeof(server_payload_t)
+#define TCP_SEND_QUEUE_ITEM_SIZE sizeof(qret_server_payload)
 
 #define UDP_SEND_QUEUE_LEN 10
-#define UDP_SEND_QUEUE_ITEM_SIZE sizeof(data_packet_t)
+#define UDP_SEND_QUEUE_ITEM_SIZE sizeof(qret_data_packet)
 
 static const char *TAG = "NETWORK MANAGER";
 
@@ -188,7 +188,7 @@ void network_state_manager(void *pvParams) {
             xEventGroupSetBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
 
             // TODO take this out later, should be in main but lazy
-            server_payload_t payload = {
+            qret_server_payload payload = {
                 .packet_type = PT_CONFIG,
                 .payload_data = {
                     .config = {

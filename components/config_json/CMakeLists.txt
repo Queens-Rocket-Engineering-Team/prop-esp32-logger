@@ -11,6 +11,7 @@ idf_component_register(
     REQUIRES
     ads112c04
     sensors
+    control
 )
 
 idf_build_get_property(python PYTHON)

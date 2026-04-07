@@ -8,6 +8,10 @@
 
 #include "qret_protocol.h"
 
+#define MESSAGE_QUEUE_TIMEOUT (pdMS_TO_TICKS(10))
+
+#define WIFI_CONNECTED_BIT 1
+
 enum {
     SIG_WIFI_DISCONN = (1 << 0),
     SIG_WIFI_CONN = (1 << 1),
@@ -33,8 +37,6 @@ typedef struct {
     TaskHandle_t tcp_send_handle;
     TaskHandle_t udp_send_handle;
 } network_ctx_t;
-
-#define WIFI_CONNECTED_BIT 1
 
 esp_err_t wifi_event_handler_register(network_ctx_t *network_ctx);
 

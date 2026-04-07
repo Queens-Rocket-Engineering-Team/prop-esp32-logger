@@ -67,9 +67,9 @@ void udp_client_send(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
-    static data_packet_t data_packet;
+    static qret_data_packet data_packet;
 
-    qret_protocol_ret_t ret = PROTOCOL_OK;
+    qret_protocol_ret ret = PROTOCOL_OK;
 
     while (1) {
         // only pause when server is disconnected

@@ -56,9 +56,6 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    // set up network manager
-    ESP_RETURN_ON_ERROR(s_network_setup(network_ctx), TAG, "Failed to set up network_ctx");
-
     // initialize I2C bus
     i2c_master_bus_config_t i2c_mst_config = {
         .i2c_port = I2C_NUM_0,
@@ -91,6 +88,10 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
         "Failed to initialize sensors"
     );
 
+    ESP_RETURN_ON_ERROR(
+        config_controls_init(app_ctx->controls, CONFIG_NUM_CONTROLS), TAG, "Failed to initialize controls"
+    );
+
     // set up sensor stream event group
     static StaticEventGroup_t xEventGroup_SENSORSTREAM;
 
@@ -111,7 +112,10 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
         &xTaskBuffer_SENSORSTREAM
     );
     configASSERT(app_ctx->sensor_stream_handle);
-    
+
+    // set up network manager
+    ESP_RETURN_ON_ERROR(s_network_setup(network_ctx), TAG, "Failed to set up network_ctx");
+
     app_ctx->sequence_spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     app_ctx->sequence = 0;
     app_ctx->ts_offset = 0;

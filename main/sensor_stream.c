@@ -21,21 +21,28 @@ void sensor_stream(void *pvParams) {
 
     esp_err_t err;
 
-    int16_t frequency = 10; // default 10Hz
+    uint16_t frequency = 100; // default 10Hz
 
     while (1) {
 
         xEventGroupWaitBits(
-            app_ctx->sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT, pdFALSE, pdFALSE, portMAX_DELAY
+            app_ctx->sensor_stream_event_group_handle,
+            SENSOR_STREAM_ENABLE_BIT | SENSORS_SINGLE_READING_BIT,
+            pdFALSE,
+            pdFALSE,
+            portMAX_DELAY
         );
 
-        xTaskNotifyWait(0, 0, (uint32_t *)&frequency, 0);
-        if (frequency == 0) {
-            frequency = 10;
+        uint32_t new_frequency;
+        if (xTaskNotifyWait(0, 0, &new_frequency, 0) == pdTRUE) {
+            if (new_frequency != 0) {
+                frequency = (uint16_t)new_frequency;
+            }
         }
+
         ESP_LOGI(TAG, "Stream frequency: %u", frequency);
 
-        static qret_sensor_data_t data[CONFIG_NUM_SENSORS] = {0};
+        static qret_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 
         for (size_t i = 0; i < CONFIG_NUM_SENSORS; i++) {
 
@@ -116,7 +123,7 @@ void sensor_stream(void *pvParams) {
         }
 
         taskENTER_CRITICAL(&app_ctx->sequence_spinlock);
-        data_packet_t data_packet = {
+        qret_data_packet data_packet = {
             .sensor_data = data,
             .sensor_count = CONFIG_NUM_SENSORS,
             .sequence = ++app_ctx->sequence,
@@ -124,9 +131,12 @@ void sensor_stream(void *pvParams) {
         };
         taskEXIT_CRITICAL(&app_ctx->sequence_spinlock);
 
-        xQueueSend(app_ctx->network_ctx->udp_send_queue_handle, (void *)&data_packet, 0);
+        xQueueSend(app_ctx->network_ctx->udp_send_queue_handle, (void *)&data_packet, MESSAGE_QUEUE_TIMEOUT);
 
-        // delay to satisfy given frequency
-        vTaskDelay(pdMS_TO_TICKS((uint32_t)1000 / frequency));
+        if (xEventGroupGetBits(app_ctx->sensor_stream_event_group_handle) & SENSORS_SINGLE_READING_BIT) {
+            xEventGroupClearBits(app_ctx->sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
+        } else {
+            vTaskDelay(pdMS_TO_TICKS((uint32_t)1000 / frequency));
+        }
     }
 }

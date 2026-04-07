@@ -77,9 +77,9 @@ void tcp_client_recv(void *pvParams) {
 
     static uint8_t rx_buffer[RX_BUFFER_LEN] = {0};
     static uint16_t packet_len = 0;
-    static client_payload_t payload = {0};
+    static qret_client_payload payload = {0};
 
-    qret_protocol_ret_t ret = PROTOCOL_OK;
+    qret_protocol_ret ret = PROTOCOL_OK;
 
     while (1) {
         // only pause when server is disconnected
@@ -122,7 +122,7 @@ void tcp_client_recv(void *pvParams) {
         if (ret != PROTOCOL_OK) {
             ESP_LOGE(TAG, "QRET protocol err:", ret);
         }
-        xQueueSend(network_ctx->tcp_recv_queue_handle, (void *)&payload, 0);
+        xQueueSend(network_ctx->tcp_recv_queue_handle, (void *)&payload, MESSAGE_QUEUE_TIMEOUT);
     }
 }
 
@@ -130,9 +130,9 @@ void tcp_client_send(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
-    static server_payload_t payload = {0};
+    static qret_server_payload payload = {0};
 
-    qret_protocol_ret_t ret = PROTOCOL_OK;
+    qret_protocol_ret ret = PROTOCOL_OK;
 
     while (1) {
         // only pause when server is disconnected

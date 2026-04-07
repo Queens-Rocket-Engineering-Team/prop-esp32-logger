@@ -192,13 +192,15 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
     configASSERT(ads112c04->xSemaphoreDRDY);
 
+    ESP_RETURN_ON_ERROR(gpio_reset_pin(ads112c04_cfg->drdy_pin), TAG, "Failed to reset GPIO for DRDY");
+
     // set up DRDY pin ISR handler
     gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_NEGEDGE,
-        .mode = GPIO_MODE_INPUT,
         .pin_bit_mask = (1ULL << ads112c04_cfg->drdy_pin),
+        .mode = GPIO_MODE_INPUT,
+        .intr_type = GPIO_INTR_NEGEDGE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_DISABLE
     };
     ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config for DRDY failed");
 

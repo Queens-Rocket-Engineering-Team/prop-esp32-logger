@@ -4,37 +4,35 @@
 #include <esp_err.h>
 #include <stdint.h>
 
-// Control devices such as relays, solenoids etc.
-
 typedef enum {
     CONTROL_OPEN,
     CONTROL_CLOSED,
-    CONTROL_UNKNOWN
+    CONTROL_UNKNOWN,
 } control_state_t;
 
 typedef enum {
-    OPEN_LOW, // Actuator open when GPIO low
-    OPEN_HIGH // Actuator open when GPIO high
-} control_active_t;
+    CONTROL_NO, // actuator normally open
+    CONTROL_NC, // actuator normally closed
+} control_contact_t;
 
 typedef struct {
     gpio_num_t gpio_num;
     control_state_t state;
-    control_active_t active;
+    control_state_t default_state;
+    control_contact_t contact;
 } control_t;
 
-esp_err_t set_control(control_t *control, control_state_t state);
+typedef struct {
+    gpio_num_t gpio_num;
+    control_state_t default_state;
+    control_contact_t contact;
+} control_config_t;
 
 // Initialize control pin
-esp_err_t control_init(
-    control_t *control,
-    gpio_num_t gpio_num,
-    control_state_t state,
-    control_active_t active
-);
+esp_err_t control_init(control_t *control, const control_config_t *control_cfg);
 
-esp_err_t open_control(control_t *control);
+esp_err_t control_open(control_t *control);
+esp_err_t control_close(control_t *control);
+esp_err_t control_set_default(control_t *control);
 
-esp_err_t close_control(control_t *control);
-
-control_state_t get_control_state(const control_t *control);
+control_state_t control_get_state(const control_t *control);

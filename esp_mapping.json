@@ -115,11 +115,11 @@
         "SAFE_24V_CTL": {
             "pin": 4
         },
-        "IGNITOR_RUN_CTL": {
-            "pin": 5
-        },
         "IGNITOR_PRIME_CTL": {
             "pin": 6
+        },
+        "IGNITOR_RUN_CTL": {
+            "pin": 5
         }
     }
 }

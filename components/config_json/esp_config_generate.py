@@ -35,6 +35,7 @@ mapping, _ = read_json(args.mapping)
 
 num_adcs = len(mapping['ADC_map'])
 num_sensors = sum(len(sensor_group) for sensor_group in config['sensor_info'].values())
+num_controls = len(config['controls'])
 
 sda_pin = mapping['i2c_bus']['sda_pin']
 scl_pin = mapping['i2c_bus']['scl_pin']
@@ -53,6 +54,7 @@ header_content = f"""\
 #include "load_cell.h"
 #include "resistance_sensor.h"
 #include "current_sensor.h"
+#include "control.h"
 
 // Auto-generated header from esp_config.json and esp_mapping.json
 
@@ -61,6 +63,7 @@ extern const char json_config_str[];
 
 #define CONFIG_NUM_ADCS {num_adcs}
 #define CONFIG_NUM_SENSORS {num_sensors}
+#define CONFIG_NUM_CONTROLS {num_controls}
 
 #define CONFIG_SDA_PIN {sda_pin}
 #define CONFIG_SCL_PIN {scl_pin}
@@ -90,6 +93,8 @@ typedef struct {{
 esp_err_t config_ads112c04s_init(ads112c04_t adcs[], size_t len_adcs, i2c_master_bus_handle_t bus_handle);
 
 esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads112c04_t adcs[], size_t len_adcs);
+
+esp_err_t config_controls_init(control_t controls[], size_t len_controls);
 """
 
 try:
@@ -181,6 +186,17 @@ sensor_templates = {
     },
 }
 
+control_fields = {
+    'default_state': {
+        'open': 'CONTROL_OPEN',
+        'closed': 'CONTROL_CLOSED',
+    },
+    'contact': {
+        'solenoid': 'CONTROL_NC',
+        'relay': 'CONTROL_NO',
+    },
+}
+
 def generate_adc_init(adc_cfg: dict, index: int) -> str:
 
     adc_addr = adc_cfg['addr']
@@ -200,7 +216,7 @@ def generate_adc_init(adc_cfg: dict, index: int) -> str:
     """
 
 def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, index: int) -> str:
-    template = sensor_templates.get(sensor_type)
+    template = sensor_templates[sensor_type]
 
     sensor_key = sensor_cfg['sensor_index']
     pin_map = mapping['sensor_map'][sensor_key]
@@ -238,6 +254,31 @@ def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, inde
     }}
     """
 
+def generate_control_init(control_cfg: dict, index: int) -> str:
+
+    control_key = control_cfg['control_index']
+    pin_map = mapping['control_map'][control_key]
+
+    pin = pin_map['pin']
+
+    json_default_state = control_cfg['default_state'].casefold()
+    default_state = control_fields['default_state'][json_default_state]
+
+    control_type = control_cfg['type'].casefold()
+    contact = control_fields['contact'][control_type]
+
+    return f"""\
+    {{
+    const control_config_t control_cfg = {{
+        .gpio_num = {pin},
+        .default_state = {default_state},
+        .contact = {contact},
+    }};
+
+    ESP_RETURN_ON_ERROR(control_init(&controls[{index}], &control_cfg), TAG, "Failed to initialize control, index {index}");
+    }}
+    """
+
 adcs_init_code = []
 adcs_initialized = 0
 for adc_cfg in mapping['ADC_map'].values():
@@ -255,6 +296,14 @@ for sensor_type, sensors in config['sensor_info'].items():
 
 sensors_init_code = '\n'.join(sensors_init_code)
 
+controls_init_code = []
+controls_initialized = 0
+for control_cfg in config['controls'].values():
+    controls_init_code.append(generate_control_init(control_cfg, controls_initialized))
+    controls_initialized += 1
+
+controls_init_code = '\n'.join(controls_init_code)
+
 source_content = f"""\
 #include <esp_check.h>
 #include <esp_err.h>
@@ -266,6 +315,7 @@ source_content = f"""\
 #include "load_cell.h"
 #include "resistance_sensor.h"
 #include "current_sensor.h"
+#include "control.h"
 
 #include "config_json.h"
 
@@ -305,6 +355,18 @@ esp_err_t config_sensors_init(config_sensor_t sensors[], size_t sensors_len, ads
     }}
 
 {sensors_init_code}
+    return ESP_OK;
+}}
+
+esp_err_t config_controls_init(control_t controls[], size_t len_controls) {{
+    if (controls == NULL) {{
+        return ESP_ERR_INVALID_ARG;
+    }}
+    if (len_controls < CONFIG_NUM_CONTROLS) {{
+        return ESP_ERR_NO_MEM;
+    }}
+
+{controls_init_code}
     return ESP_OK;
 }}
 """
