@@ -19,9 +19,6 @@ static const char *TAG = "MAIN";
 
 void app_main(void) {
 
-    esp_log_level_set("wifi", ESP_LOG_WARN);
-    esp_log_level_set("phy_init", ESP_LOG_WARN);
-
     static network_ctx_t network_ctx = {0};
     static app_ctx_t app_ctx = {0};
 
