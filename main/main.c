@@ -2,6 +2,8 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
 #include "config_json.h"
 #include "control.h"
@@ -11,6 +13,8 @@
 #include "wifi_tools.h"
 
 static const char *TAG = "MAIN";
+
+#define WATCHDOG_RESET_TIMEOUT_MIN 5
 
 void app_main(void) {
 
@@ -23,67 +27,77 @@ void app_main(void) {
     ESP_ERROR_CHECK(app_setup(&app_ctx, &network_ctx));
     ESP_LOGI(TAG, "Setup complete");
 
+    // reset watchdog timer
+    uint64_t last_packet_time_us = esp_timer_get_time();
     // processing for incoming/outgoing packets
     qret_client_payload payload_in = {0};
     qret_server_payload payload_out = {0};
 
     while (1) {
 
-        xQueueReceive(network_ctx.tcp_recv_queue_handle, &payload_in, portMAX_DELAY);
+        EventBits_t wifi_bits = xEventGroupGetBits(network_ctx.wifi_event_group_handle);
+        EventBits_t stream_bits = xEventGroupGetBits(app_ctx.sensor_stream_event_group_handle);
 
-        switch (payload_in.packet_type) {
-        case PT_ESTOP: {
+        if ((stream_bits & SENSOR_STREAM_ENABLE_BIT) && !(wifi_bits & SERVER_CONNECTED_BIT)) {
+            xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
+            ESP_LOGI(TAG, "Sensor stream stopped");
+        }
+
+        if (!network_ctx.config_sent && (wifi_bits & SERVER_CONNECTED_BIT)) {
+            last_packet_time_us = esp_timer_get_time();
+            payload_out.packet_type = PT_CONFIG;
+
+            const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+            const qret_config_packet config = {
+                .json_config = json_config_str,
+                .json_config_len = JSON_CONFIG_LEN,
+                .header = {
+                           .sequence = sequence,
+                           .timestamp = 0,
+                           },
+            };
+            payload_out.payload_data.config = config;
+
+            xQueueSend(network_ctx.tcp_send_queue_handle, (void *)&payload_out, 0);
+            network_ctx.config_sent = true;
+        }
+
+        if (esp_timer_get_time() - last_packet_time_us > WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1e6) {
             for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                 control_set_default(&app_ctx.controls[i]);
             }
             xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
+            ESP_LOGW(TAG, "Software watchdog triggered, reset to default state");
+            last_packet_time_us = esp_timer_get_time();
         }
-            continue;
 
-        case PT_TIMESYNC: {
-            app_ctx.ts_offset = payload_in.payload_data.header_only.timestamp - (uint32_t)(esp_timer_get_time() / 1000);
-            payload_out.packet_type = PT_ACK;
+        if (xQueueReceive(network_ctx.tcp_recv_queue_handle, &payload_in, pdMS_TO_TICKS(100)) == pdTRUE) {
 
-            const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-            taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-            const uint16_t sequence = ++app_ctx.sequence;
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-            const qret_ack_packet ack = {
-                .ack_packet_type = PT_TIMESYNC,
-                .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .header = {
-                           .sequence = sequence,
-                           .timestamp = timestamp,
-                           },
-            };
-            payload_out.payload_data.ack = ack;
-        } break;
+            last_packet_time_us = esp_timer_get_time();
 
-        case PT_CONTROL: {
-            uint8_t i = payload_in.payload_data.control.command_id;
-            esp_err_t err = ESP_FAIL;
-            qret_packet_err nack_error_code = ERR_HARDWARE_FAULT;
-
-            if (i < CONFIG_NUM_CONTROLS) {
-                if (payload_in.payload_data.control.command_state == CS_OPEN) {
-                    err = control_open(&app_ctx.controls[i]);
-                } else if (payload_in.payload_data.control.command_state == CS_CLOSED) {
-                    err = control_close(&app_ctx.controls[i]);
+            switch (payload_in.packet_type) {
+            case PT_ESTOP: {
+                for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
+                    control_set_default(&app_ctx.controls[i]);
                 }
-            } else {
-                nack_error_code = ERR_INVALID_PARAM;
+                xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
+                ESP_LOGW(TAG, "Recieved ESTOP, reset to default state");
             }
+                continue;
 
-            ESP_ERROR_CHECK_WITHOUT_ABORT(err);
-            if (err == ESP_OK) {
+            case PT_TIMESYNC: {
+                const uint32_t new_ts_offset = payload_in.payload_data.header_only.timestamp -
+                                               (uint32_t)(esp_timer_get_time() / 1000);
+                atomic_store(&app_ctx.ts_offset, new_ts_offset);
                 payload_out.packet_type = PT_ACK;
 
-                const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-                taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-                const uint16_t sequence = ++app_ctx.sequence;
-                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
+                const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
                 const qret_ack_packet ack = {
-                    .ack_packet_type = PT_CONTROL,
+                    .ack_packet_type = PT_TIMESYNC,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
                     .header = {
                                .sequence = sequence,
@@ -91,143 +105,178 @@ void app_main(void) {
                                },
                 };
                 payload_out.payload_data.ack = ack;
-            } else {
-                payload_out.packet_type = PT_NACK;
+            } break;
 
-                const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-                taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-                const uint16_t sequence = ++app_ctx.sequence;
-                taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-                const qret_nack_packet nack = {
-                    .nack_packet_type = PT_CONTROL,
-                    .nack_sequence = payload_in.payload_data.header_only.sequence,
-                    .nack_error_code = nack_error_code,
+            case PT_CONTROL: {
+                uint8_t i = payload_in.payload_data.control.command_id;
+                esp_err_t err = ESP_FAIL;
+                qret_packet_err nack_error_code = ERR_HARDWARE_FAULT;
+
+                if (i < CONFIG_NUM_CONTROLS) {
+                    if (payload_in.payload_data.control.command_state == CS_OPEN) {
+                        err = control_open(&app_ctx.controls[i]);
+                    } else if (payload_in.payload_data.control.command_state == CS_CLOSED) {
+                        err = control_close(&app_ctx.controls[i]);
+                    }
+                } else {
+                    nack_error_code = ERR_INVALID_PARAM;
+                }
+
+                ESP_ERROR_CHECK_WITHOUT_ABORT(err);
+                if (err == ESP_OK) {
+                    payload_out.packet_type = PT_ACK;
+
+                    const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                    const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                    const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                    const qret_ack_packet ack = {
+                        .ack_packet_type = PT_CONTROL,
+                        .ack_sequence = payload_in.payload_data.header_only.sequence,
+                        .header = {
+                                   .sequence = sequence,
+                                   .timestamp = timestamp,
+                                   },
+                    };
+                    payload_out.payload_data.ack = ack;
+                } else {
+                    payload_out.packet_type = PT_NACK;
+
+                    const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                    const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                    const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                    const qret_nack_packet nack = {
+                        .nack_packet_type = PT_CONTROL,
+                        .nack_sequence = payload_in.payload_data.header_only.sequence,
+                        .nack_error_code = nack_error_code,
+                        .header = {
+                                   .sequence = sequence,
+                                   .timestamp = timestamp,
+                                   },
+                    };
+                    payload_out.payload_data.nack = nack;
+                }
+            } break;
+
+            case PT_STATUS_REQUEST: {
+                static qret_control_status control_status[CONFIG_NUM_CONTROLS] = {0};
+
+                for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
+                    control_status[i].control_id = i;
+                    const control_state_t control_internal_state = control_get_state(&app_ctx.controls[i]);
+                    switch (control_internal_state) {
+                    case CONTROL_OPEN:
+                        control_status[i].control_state = CS_OPEN;
+                        break;
+                    case CONTROL_CLOSED:
+                        control_status[i].control_state = CS_CLOSED;
+                        break;
+                    case CONTROL_UNKNOWN:
+                        control_status[i].control_state = CS_ERROR;
+                    };
+                }
+
+                payload_out.packet_type = PT_STATUS;
+
+                const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                const qret_status_packet status = {
+                    .control_data = control_status,
+                    .control_count = CONFIG_NUM_CONTROLS,
+                    .device_status = DS_ACTIVE,
                     .header = {
                                .sequence = sequence,
                                .timestamp = timestamp,
                                },
                 };
-                payload_out.payload_data.nack = nack;
-            }
-        } break;
+                payload_out.payload_data.status = status;
+            } break;
 
-        case PT_STATUS_REQUEST: {
-            static qret_control_status control_status[CONFIG_NUM_CONTROLS] = {0};
+            case PT_STREAM_START: {
+                // give the stream task the frequency
+                xTaskNotify(
+                    app_ctx.sensor_stream_handle,
+                    payload_in.payload_data.stream_start.stream_frequency,
+                    eSetValueWithOverwrite
+                );
+                // notify the stream task to start
+                xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
+                ESP_LOGI(TAG, "Sensor stream started");
+                payload_out.packet_type = PT_ACK;
 
-            for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
-                control_status[i].control_id = i;
-                const control_state_t control_internal_state = control_get_state(&app_ctx.controls[i]);
-                switch (control_internal_state) {
-                case CONTROL_OPEN:
-                    control_status[i].control_state = CS_OPEN;
-                    break;
-                case CONTROL_CLOSED:
-                    control_status[i].control_state = CS_CLOSED;
-                    break;
-                case CONTROL_UNKNOWN:
-                    control_status[i].control_state = CS_ERROR;
+                const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                const qret_ack_packet ack = {
+                    .ack_packet_type = PT_STREAM_START,
+                    .ack_sequence = payload_in.payload_data.header_only.sequence,
+                    .header = {
+                               .sequence = sequence,
+                               .timestamp = timestamp,
+                               },
                 };
+                payload_out.payload_data.ack = ack;
+            } break;
+
+            case PT_STREAM_STOP: {
+                xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
+                ESP_LOGI(TAG, "Sensor stream stopped");
+                payload_out.packet_type = PT_ACK;
+
+                const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                const qret_ack_packet ack = {
+                    .ack_packet_type = PT_STREAM_STOP,
+                    .ack_sequence = payload_in.payload_data.header_only.sequence,
+                    .header = {
+                               .sequence = sequence,
+                               .timestamp = timestamp,
+                               },
+                };
+                payload_out.payload_data.ack = ack;
+            } break;
+
+            case PT_GET_SINGLE: {
+                // notify the stream task to send single reading
+                xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
+                ESP_LOGI(TAG, "Sensors single reading");
+            }
+                continue;
+
+            case PT_HEARTBEAT: {
+                payload_out.packet_type = PT_ACK;
+
+                const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
+                const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+                const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
+
+                const qret_ack_packet ack = {
+                    .ack_packet_type = PT_HEARTBEAT,
+                    .ack_sequence = payload_in.payload_data.header_only.sequence,
+                    .header = {
+                               .sequence = sequence,
+                               .timestamp = timestamp,
+                               },
+                };
+                payload_out.payload_data.ack = ack;
+            } break;
+
+            case PT_ACK:
+            case PT_NACK:
+                continue;
+
+            default:
+                ESP_LOGE(TAG, "Invalid client packet type recieved: %d", payload_in.packet_type);
+                continue;
             }
 
-            payload_out.packet_type = PT_STATUS;
-
-            const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-            taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-            const uint16_t sequence = ++app_ctx.sequence;
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-            const qret_status_packet status = {
-                .control_data = control_status,
-                .control_count = CONFIG_NUM_CONTROLS,
-                .device_status = DS_ACTIVE,
-                .header = {
-                           .sequence = sequence,
-                           .timestamp = timestamp,
-                           },
-            };
-            payload_out.payload_data.status = status;
-        } break;
-
-        case PT_STREAM_START: {
-            // give the stream task the frequency
-            xTaskNotify(
-                app_ctx.sensor_stream_handle,
-                payload_in.payload_data.stream_start.stream_frequency,
-                eSetValueWithOverwrite
-            );
-            // notify the stream task to start
-            xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
-            ESP_LOGI(TAG, "Sensor stream started");
-            payload_out.packet_type = PT_ACK;
-
-            const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-            taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-            const uint16_t sequence = ++app_ctx.sequence;
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-            const qret_ack_packet ack = {
-                .ack_packet_type = PT_STREAM_START,
-                .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .header = {
-                           .sequence = sequence,
-                           .timestamp = timestamp,
-                           },
-            };
-            payload_out.payload_data.ack = ack;
-        } break;
-
-        case PT_STREAM_STOP: {
-            xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
-            ESP_LOGI(TAG, "Sensor stream stopped");
-            payload_out.packet_type = PT_ACK;
-
-            const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-            taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-            const uint16_t sequence = ++app_ctx.sequence;
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-            const qret_ack_packet ack = {
-                .ack_packet_type = PT_STREAM_STOP,
-                .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .header = {
-                           .sequence = sequence,
-                           .timestamp = timestamp,
-                           },
-            };
-            payload_out.payload_data.ack = ack;
-        } break;
-
-        case PT_GET_SINGLE: {
-            // notify the stream task to send single reading
-            xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
-            ESP_LOGI(TAG, "Sensors single reading");
+            xQueueSend(network_ctx.tcp_send_queue_handle, (void *)&payload_out, MESSAGE_QUEUE_TIMEOUT);
         }
-            continue;
-
-        case PT_HEARTBEAT: {
-            payload_out.packet_type = PT_ACK;
-
-            const uint32_t timestamp = app_ctx.ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-            taskENTER_CRITICAL(&app_ctx.sequence_spinlock);
-            const uint16_t sequence = ++app_ctx.sequence;
-            taskEXIT_CRITICAL(&app_ctx.sequence_spinlock);
-            const qret_ack_packet ack = {
-                .ack_packet_type = PT_HEARTBEAT,
-                .ack_sequence = payload_in.payload_data.header_only.sequence,
-                .header = {
-                           .sequence = sequence,
-                           .timestamp = timestamp,
-                           },
-            };
-            payload_out.payload_data.ack = ack;
-        } break;
-
-        case PT_ACK:
-        case PT_NACK:
-            continue;
-
-        default:
-            ESP_LOGE(TAG, "Invalid client packet type recieved: %d", payload_in.packet_type);
-            continue;
-        }
-
-        xQueueSend(network_ctx.tcp_send_queue_handle, (void *)&payload_out, MESSAGE_QUEUE_TIMEOUT);
     }
 }

@@ -63,7 +63,7 @@ static qret_protocol_ret s_unpack_header(const uint8_t buffer[], size_t header_l
     return PROTOCOL_OK;
 }
 
-static inline bool _is_packet_header_only(qret_packet_type packet_type) {
+static inline bool s_is_packet_header_only(qret_packet_type packet_type) {
     switch (packet_type) {
     case PT_ESTOP:
     case PT_DISCOVERY:
@@ -82,7 +82,7 @@ qret_protocol_ret make_header_only_packet(uint8_t buffer[], size_t *packet_len, 
     if (buffer == NULL || packet_len == NULL || header_only == NULL) {
         return PROTOCOL_NULL_PTR_ERR;
     }
-    if (!_is_packet_header_only(packet_type)) {
+    if (!s_is_packet_header_only(packet_type)) {
         return PROTOCOL_INVALID_PACKET_TYPE;
     }
     if (*packet_len < HEADER_SIZE) {

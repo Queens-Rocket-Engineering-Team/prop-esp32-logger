@@ -19,14 +19,14 @@ typedef enum {
 } conversion_mode_t;
 
 typedef struct {
-    uint8_t addr;
-    i2c_master_dev_handle_t dev_handle;
-    SemaphoreHandle_t xSemaphoreDRDY;
     StaticSemaphore_t xSemaphoreBufferDRDY;
+    SemaphoreHandle_t xSemaphoreDRDY;
+    i2c_master_dev_handle_t dev_handle;
     float ref_voltage;
+    conversion_mode_t conversion_mode;
+    uint8_t addr;
     uint8_t gain;
     bool pga_enabled;
-    conversion_mode_t conversion_mode;
 } ads112c04_t;
 
 typedef struct {

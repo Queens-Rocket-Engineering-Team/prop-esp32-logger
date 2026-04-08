@@ -14,7 +14,7 @@ static esp_err_t s_control_set_state(control_t *control, control_state_t new_sta
 
     uint32_t level;
     if (control->contact == CONTROL_NO) { // choose correct gpio level for desired state
-        level = (new_state == CONTROL_CLOSED); // ex. if state is closed, level must be high
+        level = (new_state == CONTROL_CLOSED); // ex. if new_state is closed, level must be high
     } else if (control->contact == CONTROL_NC) {
         level = (new_state == CONTROL_OPEN);
     } else {

@@ -113,12 +113,12 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
     );
     configASSERT(app_ctx->sensor_stream_handle);
 
-    // set up network manager
-    ESP_RETURN_ON_ERROR(s_network_setup(network_ctx), TAG, "Failed to set up network_ctx");
-
-    app_ctx->sequence_spinlock = (portMUX_TYPE)portMUX_INITIALIZER_UNLOCKED;
     app_ctx->sequence = 0;
     app_ctx->ts_offset = 0;
+
+    // set up network manager
+    ESP_RETURN_ON_ERROR(s_network_setup(network_ctx), TAG, "Failed to set up network_ctx");
     app_ctx->network_ctx = network_ctx;
+
     return ESP_OK;
 }

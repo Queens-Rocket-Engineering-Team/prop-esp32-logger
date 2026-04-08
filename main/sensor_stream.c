@@ -2,6 +2,7 @@
 #include <esp_log.h>
 #include <esp_timer.h>
 #include <freertos/FreeRTOS.h>
+#include <stdatomic.h>
 
 #include "ads112c04.h"
 #include "current_sensor.h"
@@ -16,12 +17,15 @@
 
 static const char *TAG = "SENSOR STREAM";
 
+#define MAX_FREQUENCY 100
+
 void sensor_stream(void *pvParams) {
     app_ctx_t *app_ctx = (app_ctx_t *)pvParams;
 
     esp_err_t err;
 
-    uint16_t frequency = 100; // default 10Hz
+    uint32_t period_ms = 1000; // default to 1Hz
+    TickType_t xLastWakeTime = xTaskGetTickCount();
 
     while (1) {
 
@@ -35,9 +39,11 @@ void sensor_stream(void *pvParams) {
 
         uint32_t new_frequency;
         if (xTaskNotifyWait(0, 0, &new_frequency, 0) == pdTRUE) {
-            if (new_frequency != 0) {
-                frequency = (uint16_t)new_frequency;
-                ESP_LOGI(TAG, "Stream frequency: %u", frequency);
+            if (new_frequency > 0) {
+                const uint32_t limited_frequency = (new_frequency < MAX_FREQUENCY ? new_frequency : MAX_FREQUENCY);
+                period_ms = 1000 / limited_frequency;
+                ESP_LOGI(TAG, "Stream frequency: %u", limited_frequency);
+                xLastWakeTime = xTaskGetTickCount(); // update timestamp to avoid double sending packets on change
             }
         }
 
@@ -121,10 +127,10 @@ void sensor_stream(void *pvParams) {
             }
         }
 
-        const uint32_t timestamp = app_ctx->ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
-        taskENTER_CRITICAL(&app_ctx->sequence_spinlock);
-        const uint16_t sequence = ++app_ctx->sequence;
-        taskEXIT_CRITICAL(&app_ctx->sequence_spinlock);
+        const uint32_t current_ts_offset = atomic_load(&app_ctx->ts_offset);
+        const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
+        const uint16_t sequence = atomic_fetch_add(&app_ctx->sequence, 1);
+
         qret_data_packet data_packet = {
             .sensor_data = data,
             .sensor_count = CONFIG_NUM_SENSORS,
@@ -139,7 +145,7 @@ void sensor_stream(void *pvParams) {
         if (xEventGroupGetBits(app_ctx->sensor_stream_event_group_handle) & SENSORS_SINGLE_READING_BIT) {
             xEventGroupClearBits(app_ctx->sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
         } else {
-            vTaskDelay(pdMS_TO_TICKS((uint32_t)1000 / frequency));
+            xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(period_ms));
         }
     }
 }

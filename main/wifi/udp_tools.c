@@ -73,7 +73,7 @@ void udp_client_send(void *pvParams) {
 
     while (1) {
         // only pause when server is disconnected
-        xEventGroupWaitBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+        xEventGroupWaitBits(network_ctx->wifi_event_group_handle, SERVER_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
 
         // timeout after 100ms to check if server is still alive
         if (xQueueReceive(network_ctx->udp_send_queue_handle, &data_packet, pdMS_TO_TICKS(100)) == pdFALSE) {

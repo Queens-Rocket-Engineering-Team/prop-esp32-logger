@@ -144,9 +144,14 @@ void network_state_manager(void *pvParams) {
     while (1) {
         xTaskNotifyWait(0, UINT32_MAX, &signal, portMAX_DELAY);
 
-        if (signal & SIG_WIFI_DISCONN) {
+        if (signal & SIG_SERVER_DISCONN) {
+            xTaskNotify(xTaskGetCurrentTaskHandle(), SIG_SERVER_RETRY, eSetBits);
+            ESP_LOGE(TAG, "Server disconnected, retrying...");
+        }
+        if (signal & SIG_WIFI_DISCONN || signal & SIG_SERVER_DISCONN) {
             // reset state manager if wifi disconnects
-            xEventGroupClearBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
+            xEventGroupClearBits(network_ctx->wifi_event_group_handle, SERVER_CONNECTED_BIT);
+            network_ctx->config_sent = false;
 
             if (network_ctx->ssdp_sock != -1) {
                 close(network_ctx->ssdp_sock);
@@ -163,13 +168,15 @@ void network_state_manager(void *pvParams) {
             }
             continue;
         }
-        if (signal & SIG_WIFI_CONN) {
+        if (signal & SIG_WIFI_CONN || signal & SIG_SERVER_RETRY) {
             // look for server when wifi connects
             err = ssdp_discover_server(
                 &network_ctx->ssdp_sock, network_ctx->server_ip, IPADDR_STRLEN_MAX, network_ctx->netif_handle
             );
             if (err == ESP_OK) {
                 xTaskNotify(xTaskGetCurrentTaskHandle(), SIG_SSDP_GOT_SERVER, eSetBits);
+            } else {
+                xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
             }
         }
         if (signal & SIG_SSDP_GOT_SERVER) {
@@ -179,29 +186,15 @@ void network_state_manager(void *pvParams) {
             );
             if (err == ESP_OK) {
                 xTaskNotify(xTaskGetCurrentTaskHandle(), SIG_TCP_CONN_SERVER, eSetBits);
+            } else {
+                xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
             }
         }
         if (signal & SIG_TCP_CONN_SERVER) {
             // create the udp socket for sending data packets
             udp_create_socket(&network_ctx->server_udp_sock, network_ctx->server_ip, network_ctx->server_udp_port);
             // enable the recv/send tasks when connected to server
-            xEventGroupSetBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT);
-
-            // TODO take this out later, should be in main but lazy
-            qret_server_payload payload = {
-                .packet_type = PT_CONFIG,
-                .payload_data = {
-                    .config = {
-                        .json_config = json_config_str,
-                        .json_config_len = JSON_CONFIG_LEN,
-                        .header = {
-                            .sequence = 0,
-                            .timestamp = 0,
-                        },
-                    }
-                },
-            };
-            xQueueSend(network_ctx->tcp_send_queue_handle, (void *)&payload, 0);
+            xEventGroupSetBits(network_ctx->wifi_event_group_handle, SERVER_CONNECTED_BIT);
         }
     }
 }

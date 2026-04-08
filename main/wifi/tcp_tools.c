@@ -51,7 +51,16 @@ esp_err_t tcp_connect_to_server(int32_t *sock, const char server_ip[], uint16_t 
         ret = ESP_FAIL;
         goto cleanup;
     }
-
+    // set timeout for socket recv
+    struct timeval tv = {
+        .tv_sec = SERVER_SOCKET_TIMEOUT_S,
+        .tv_usec = 0,
+    };
+    err = setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    if (err != 0) {
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
     // attempt to connect to the server
     err = connect(*sock, res->ai_addr, res->ai_addrlen);
     if (err != 0) {
@@ -83,15 +92,23 @@ void tcp_client_recv(void *pvParams) {
 
     while (1) {
         // only pause when server is disconnected
-        xEventGroupWaitBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+        xEventGroupWaitBits(
+            network_ctx->wifi_event_group_handle, SERVER_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY
+        );
 
         // get the full header from a packet
         int32_t header_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL);
         if (header_len_recv < 0) {
-            ESP_LOGE(TAG, "recv failed: errno %d", errno);
+            if (errno = EAGAIN) {
+                ESP_LOGE(TAG, "TCP socket timed out");
+            } else {
+                ESP_LOGE(TAG, "recv failed: errno %d", errno);
+            }
+            xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
             continue;
         } else if (header_len_recv == 0) {
             ESP_LOGI(TAG, "Connection closed by server gracefully");
+            xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
             continue;
         }
 
@@ -106,10 +123,16 @@ void tcp_client_recv(void *pvParams) {
             // recieve the rest of the packet if not header only
             data_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer + HEADER_SIZE, packet_len, MSG_WAITALL);
             if (data_len_recv < 0) {
-                ESP_LOGE(TAG, "recv failed: errno %d", errno);
+                if (errno = EAGAIN) {
+                    ESP_LOGE(TAG, "TCP socket timed out");
+                } else {
+                    ESP_LOGE(TAG, "recv failed: errno %d", errno);
+                }
+                xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
                 continue;
             } else if (data_len_recv == 0) {
                 ESP_LOGI(TAG, "Connection closed by server gracefully");
+                xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
                 continue;
             }
         }
@@ -136,7 +159,9 @@ void tcp_client_send(void *pvParams) {
 
     while (1) {
         // only pause when server is disconnected
-        xEventGroupWaitBits(network_ctx->wifi_event_group_handle, WIFI_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY);
+        xEventGroupWaitBits(
+            network_ctx->wifi_event_group_handle, SERVER_CONNECTED_BIT, pdFALSE, pdFALSE, portMAX_DELAY
+        );
 
         // timeout after 100ms to check if server is still alive
         if (xQueueReceive(network_ctx->tcp_send_queue_handle, &payload, pdMS_TO_TICKS(100)) == pdFALSE) {
@@ -173,6 +198,7 @@ void tcp_client_send(void *pvParams) {
         int32_t len_sent = send(network_ctx->server_tcp_sock, tx_buffer, packet_len, 0);
         if (len_sent < 0) {
             ESP_LOGE(TAG, "send failed: errno %d", errno);
+            xTaskNotify(network_ctx->network_manager_handle, SIG_SERVER_DISCONN, eSetBits);
             continue;
         }
         ESP_LOGD(TAG, "Outgoing packet len: %d", len_sent);

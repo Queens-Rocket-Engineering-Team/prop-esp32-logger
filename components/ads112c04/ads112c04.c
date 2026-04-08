@@ -329,7 +329,10 @@ esp_err_t ads112c04_get_single_voltage_reading(
 
     ESP_RETURN_ON_ERROR(s_send_command(ads112c04, START_SYNC), TAG, "START/SYNC command failed");
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, portMAX_DELAY); // wait until DRDY pin pulls low
+    // wait until DRDY pin pulls low
+    if (xSemaphoreTake(ads112c04->xSemaphoreDRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
+    }
 
     int16_t raw_data = 0;
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
@@ -349,7 +352,10 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
 
     ESP_RETURN_ON_ERROR(s_send_command(ads112c04, START_SYNC), TAG, "START/SYNC command failed");
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, portMAX_DELAY); // wait until DRDY pin pulls low
+    // wait until DRDY pin pulls low
+    if (xSemaphoreTake(ads112c04->xSemaphoreDRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
+    }
 
     int16_t raw_data = 0;
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
