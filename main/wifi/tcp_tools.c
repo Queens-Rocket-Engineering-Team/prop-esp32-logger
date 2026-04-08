@@ -99,7 +99,7 @@ void tcp_client_recv(void *pvParams) {
         // get the full header from a packet
         int32_t header_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL);
         if (header_len_recv < 0) {
-            if (errno = EAGAIN) {
+            if (errno == EAGAIN) {
                 ESP_LOGE(TAG, "TCP socket timed out");
             } else {
                 ESP_LOGE(TAG, "recv failed: errno %d", errno);
@@ -116,7 +116,7 @@ void tcp_client_recv(void *pvParams) {
         int32_t data_len_recv = 0;
 
         if (packet_len - HEADER_SIZE > 0) {
-            if (packet_len > sizeof(rx_buffer) - HEADER_SIZE) {
+            if (packet_len > sizeof(rx_buffer)) {
                 ESP_LOGE(TAG, "rx_buffer ran out of space: packet len %d", packet_len);
                 break;
             }

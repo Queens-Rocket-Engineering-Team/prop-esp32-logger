@@ -15,6 +15,7 @@
 static const char *TAG = "MAIN";
 
 #define WATCHDOG_RESET_TIMEOUT_MIN 5
+#define WATCHDOG_RESET_TIMEOUT_US (WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1000000)
 
 void app_main(void) {
 
@@ -63,7 +64,7 @@ void app_main(void) {
             network_ctx.config_sent = true;
         }
 
-        if (esp_timer_get_time() - last_packet_time_us > WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1e6) {
+        if (esp_timer_get_time() - last_packet_time_us > WATCHDOG_RESET_TIMEOUT_US) {
             for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                 control_set_default(&app_ctx.controls[i]);
             }
@@ -82,7 +83,7 @@ void app_main(void) {
                     control_set_default(&app_ctx.controls[i]);
                 }
                 xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
-                ESP_LOGW(TAG, "Recieved ESTOP, reset to default state");
+                ESP_LOGW(TAG, "Received ESTOP, reset to default state");
             }
                 continue;
 
