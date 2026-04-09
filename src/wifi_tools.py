@@ -2,6 +2,7 @@ import socket  # type:ignore # This is a micropython library
 import time  # This is all micropython code to be executed on the esp32 system level
 
 import network  # type:ignore # This is a micropython library
+import uasyncio as asyncio # type:ignore # This is a micropython library
 
 
 class WiFiTimeoutError(Exception):
@@ -41,6 +42,17 @@ def disconnectWifi(wlan: network.WLAN) -> None:
     wlan.disconnect()
     wlan.active(False)
     print("Disconnected from Wi-Fi network: ", wlan.config("essid")) # This will print the name of the network that was disconnected from
+
+async def reconnectWifi(ssid: str, password: str, wlan):
+    while True:
+        try:
+            if not wlan.isconnected() and wlan.status() != network.STAT_CONNECTING:
+                wlan.disconnect()
+                wlan.connect(ssid, password)
+            await asyncio.sleep(5)
+        except Exception as e:
+            print(f'reconnectWifi exception: {e}')
+            await asyncio.sleep(1)
 
 def hostTCPSocket (ipAddress: str, port: int = 8080) -> socket.socket:
     """Host a TCP socket on the specified IP address and port number.

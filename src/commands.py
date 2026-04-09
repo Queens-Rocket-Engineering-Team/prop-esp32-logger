@@ -2,18 +2,36 @@ import uasyncio as asyncio  # type: ignore
 
 import protocol
 
-
 streamTask = None
 
 
 def readAllSensors(sensor_list):
     """Read all sensors and return list of (sensor_id, unit_enum, value) tuples."""
     readings = []
+
     for i, sensor in enumerate(sensor_list):
         value = sensor.takeData()
+        if value is None:
+            continue
+        
         unit_enum = protocol.UNIT_MAP.get(sensor.units, protocol.UNIT_UNITLESS)
         readings.append((i, unit_enum, value))
     return readings
+
+
+def getControlStates(control_list):
+    """Get all control states and return list of (control_id, control_state) tuples."""
+    control_states = []
+
+    for i, control in enumerate(control_list):
+        if control.currentState == "CLOSED":
+            control_state = protocol.CS_CLOSED
+        elif control.currentState == "OPEN":
+            control_state = protocol.CS_OPEN
+        else:
+            control_state = protocol.CS_ERROR
+        control_states.append((i, control_state))
+    return control_states
 
 
 def executeControl(control_list, command_id, command_state):
@@ -43,6 +61,7 @@ def startStream(sensor_list, sock, frequency_hz, state):
     """Start the async streaming task."""
     global streamTask  # noqa: PLW0603
     stopStream()
+    print("Starting stream.")
     streamTask = asyncio.create_task(_streamLoop(sensor_list, sock, frequency_hz, state))
 
 
@@ -66,3 +85,5 @@ async def _streamLoop(sensor_list, sock, frequency_hz, state):
             await asyncio.sleep(interval)
     except asyncio.CancelledError:
         print("Stream task cancelled.")
+    except Exception as e:
+        print(f"Stream loop error: {e}")

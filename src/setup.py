@@ -4,12 +4,13 @@ from machine import (  # type: ignore # machine is a micropython library
     SoftI2C,  # type: ignore # SoftI2C is a micropython library for I2C communication
 )
 
-from ADS112C04 import ADS112C04  # type: ignore # Importing the ADS112 class from ADS112
-from Control import Control  # type: ignore # Importing the Valve class from Valve.py
-from sensors.Current import Current  # type: ignore
-from sensors.LoadCell import LoadCell  # type: ignore
-from sensors.PressureTransducer import PressureTransducer  # type: ignore
-from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __init__ for micropython
+from ADS112C04 import ADS112C04
+from Control import Control
+from sensors.Current import Current
+from sensors.Resistance import Resistance
+from sensors.LoadCell import LoadCell
+from sensors.PressureTransducer import PressureTransducer
+from sensors.Thermocouple import Thermocouple
 
 
 # --------------------- #
@@ -17,14 +18,8 @@ from sensors.Thermocouple import Thermocouple  # type: ignore # don't need __ini
 # --------------------- #
 
 def setupI2C(scl: int, sda: int, freq: int) -> SoftI2C: # Return an I2C bus object
-    """Set up the I2C bus with the correct pins and frequency.
+    """Set up the I2C bus with the correct pins and frequency."""
 
-    This function doesn't need input parameters because the pins and frequency are set by the hardware configuration,
-    and will never need to change.
-    The SCL pin is GPIO 6 on the ESP32, and the SDA pin is GPIO 7 on the ESP32.
-    """
-
-    # I2C bus 1, SCL pin 16, SDA pin 15, frequency 100kHz
     i2cBus = SoftI2C(scl=Pin(scl), sda=Pin(sda), freq=freq)
     return i2cBus
 
@@ -57,8 +52,6 @@ def setupDeviceFromConfig(config, adcs):
         Index in control_list = command_id for CONTROL packets.
         """
 
-        sensors = {}
-        controls = {}
         sensor_list = []
         control_list = []
 
@@ -70,8 +63,10 @@ def setupDeviceFromConfig(config, adcs):
 
             for name, details in sensorInfo.get("thermocouples", {}).items():
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 5:
                     adc = adcs[details["ADCIndex"] - 1]
+                else:
+                    raise ValueError("Thermocouple must use ADS112C04")
 
                 s = Thermocouple(
                     name=name,
@@ -82,12 +77,11 @@ def setupDeviceFromConfig(config, adcs):
                     units=details["units"],
                     thermoType=details["type"],
                 )
-                sensors[name] = s
                 sensor_list.append(s)
 
             for name, details in sensorInfo.get("pressureTransducers", {}).items():
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 5:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 s = PressureTransducer(
@@ -98,12 +92,11 @@ def setupDeviceFromConfig(config, adcs):
                     maxPressure_PSI=details["maxPressure_PSI"],
                     units=details["units"],
                 )
-                sensors[name] = s
                 sensor_list.append(s)
 
             for name, details in sensorInfo.get("loadCells", {}).items():
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 5:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 s = LoadCell(
@@ -117,12 +110,11 @@ def setupDeviceFromConfig(config, adcs):
                     sensitivity_vV=details["sensitivity_vV"],
                     units=details["units"],
                 )
-                sensors[name] = s
                 sensor_list.append(s)
 
             for name, details in sensorInfo.get("current", {}).items():
                 adc = None
-                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 4:
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 5:
                     adc = adcs[details["ADCIndex"] - 1]
 
                 s = Current(
@@ -133,7 +125,22 @@ def setupDeviceFromConfig(config, adcs):
                     shuntResistor_Ohms=details["shuntResistor_Ohms"],
                     csaGain=details["csaGain"],
                 )
-                sensors[name] = s
+                sensor_list.append(s)
+
+            for name, details in sensorInfo.get("resistance", {}).items():
+                adc = None
+                if details["ADCIndex"] > 0 and details["ADCIndex"] <= 5:
+                    adc = adcs[details["ADCIndex"] - 1]
+                else:
+                    raise ValueError("Resistance must use ADS112C04")
+
+                s = Resistance(
+                    name=name,
+                    ADCIndex=details["ADCIndex"],
+                    ADC=adc,
+                    pinNumber=details["pin"],
+                    injectedCurrent=details["injectedCurrent"],
+                )
                 sensor_list.append(s)
 
             for name, details in config.get("controls", {}).items():
@@ -144,12 +151,11 @@ def setupDeviceFromConfig(config, adcs):
                             controlType=details.get("type").upper(),
                             pin=pin,
                             defaultState=defaultState)
-                controls[name.upper()] = c
                 control_list.append(c)
 
-            return sensors, controls, sensor_list, control_list
+            return sensor_list, control_list
 
         if deviceType == "Unknown":
             raise ValueError("Device type not specified in config file")
 
-        return {}, {}, [], []
+        return [], []

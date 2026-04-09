@@ -1,10 +1,10 @@
+import uasyncio as asyncio  # type:ignore # uasyncio is the micropython asyncio library
 import time
 
 from machine import (  # type: ignore
     Pin,  # type: ignore
     SoftI2C,  # type: ignore
 )
-
 
 MUX_CODES = {
     (0,1): 0b0000,  # AIN0→AIN1
@@ -22,6 +22,45 @@ MUX_CODES = {
     # Other codes exist but are not used in this implementation. See data sheet.
 }
 
+VREF_BITS = {
+    2.048: 0b00,
+    0: 0b01,
+    5: 0b10,
+}
+
+GAIN_SETTING = {
+    1: 0b000,
+    2: 0b001,
+    4: 0b010,
+    8: 0b011,
+    16:0b100,
+    32: 0b101,
+    64:0b110,
+    128: 0b111,
+}
+
+IDAC_CURRENT = {
+    0: 0b000,
+    10: 0b001,
+    50: 0b010,
+    100: 0b011,
+    250: 0b100,
+    500: 0b101,
+    1000: 0b110,
+    1500:0b111,
+    # Current in uA
+}
+
+IDAC_CODES = {
+    -1: 0b000, # Disabled
+    0: 0b001, # IDAC→AIN0
+    1: 0b010, # IDAC→AIN1
+    2: 0b011, # IDAC→AIN2
+    3: 0b100, #IDAC→AIN3
+    4: 0b101, #IDAC→REFP
+    5: 0b110, #IDAC→REFN
+}
+
 # DRDY pin mappings for the ADS112 devices on the ADC Breakout board. #FIXME: Fix for PANDA
 # This is intended for comparison with self.addressI2C, which is the I2C address shifted left by 1 bit.
 DRDY_PINS = { #             A1↓  A0↓
@@ -30,13 +69,6 @@ DRDY_PINS = { #             A1↓  A0↓
     0b10001000: 15, # ADC2 - VDD, GND - has its DRDY pin on GPIO 15
     0b10001010: 16, # ADC3 - VDD, VDD - has its DRDY pin on GPIO 16
 }
-
-VREF_BITS = {
-    2.048: 0b00,
-    0: 0b01,
-    5: 0b10,
-}
-
 
 class ADS112C04:
     """ADS112C04 I2C ADC driver for ESP32."""
@@ -54,15 +86,18 @@ class ADS112C04:
         self.activePosPin: int | None = None  # Initialize activePosPin to None
         self.activeNegPin: int | None = None  # Initialize activeNegPin to None
 
-        # FIXME: Unimplemented configuration options. We just assume that these are right for now.
-        self.pgaGain = -1  # Default gain is 1
+        self.pgaGain = -1  # Default gain is 1 (PGA Bypassed)
 
         #FIXME: Make sure to measure the VDD pins before setting this!! Mine is at 5.15V.
         self.vref = 5  # Internal reference is 2.048V but we set VDD to 5V and configure the device to use VDD as the reference voltage.
 
-
         # Initialize the device
         self.resetDevice()
+
+        self.internalTemp = 0
+        self.skipReading = False
+        self.updatingInternalTemp = False
+        self.prevInternalTemp_ms = time.ticks_ms() # type: ignore this is a micropython function
 
     def resetDevice(self) -> None:
         """Reset the ADS1112 device."""
@@ -123,58 +158,98 @@ class ADS112C04:
         self.start()  # Start continuous conversion mode
 
     def setInputPins(self,
-                        AIN_Positive: int,
-                        AIN_Negative: int = -1,
-                        pgaGain: int = -1,  # Default to -1 (bypass)
-                        ) -> None:
+                     AIN_Positive: int,
+                     AIN_Negative: int = -1,
+                     pgaGain: int = -1) -> bool:
         """Switch the active input channel for the ADS112.
 
         This function sets the MUX register to select the input channel for single-ended or differential readings. If a
         reading is single-ended, the negative input is set to GND (-1).
 
         [7:4] MUX[3:0] = MUX_CODES[ch] - Selects the input channel
-        [3:1] GAIN[2:0] = 0b000 - Sets gain to 1
-        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read
+        [3:1] GAIN[2:0] = Sets PGA gain
+        [0]   PGA_BYPASS = 0b1 - Bypass the programmable gain amplifier for a single-ended read, or when gain = -1
 
         """
 
+        channel = (AIN_Positive, AIN_Negative)
+        if channel not in MUX_CODES:
+            raise ValueError(f"Invalid channel read configuration: {channel}")
+        if pgaGain not in GAIN_SETTING and pgaGain != -1:
+            raise ValueError(f"{pgaGain} is not a valid gain value")
+        
         # Any time we change the inputs, the first order of operation is to enable pga bypass to let us make switches
         # without fear that the new channel's voltage with the old gain setting will not kill the ADC. We need to set
         # the last four bits to zero as gains 8 to 128 ignore the bypass bit and use the PGA anyways.
         reg0 = self.readRegister(0)[0]
         reg0 &= 0xF0  # Clear the last four bits
-        reg0 |= 0x01  # Set to 0b0001: gain=0, bypass=1
+        reg0 |= 0x01  # Set to 0b0001: gain=1, bypass=1
         self.writeRegister(0, bytes([reg0]))
 
-        channel = (AIN_Positive, AIN_Negative)
-        if channel not in MUX_CODES:
-            raise ValueError(f"Invalid channel read configuration: {channel}")
-
-        muxSetting = MUX_CODES[channel]
+        muxSetting = MUX_CODES[channel]  # Shift the MUX code to the correct position
 
         # Read current Reg0, keep lower 4 bits (gain + bypass), replace only MUX
-        reg0 = self.readRegister(0)[0]
         reg0 = (reg0 & 0x0F) | (muxSetting << 4)
 
-        if AIN_Negative == -1:
-            reg0 |= 0x01 # Single ended measurements always need PGA bypassed
-        elif pgaGain != -1: reg0 &= ~0x01  # Clear PGA_BYPASS bit if gain is not -1 (bypass)
-        else: reg0 |= 0x01  # Set PGA_BYPASS bit if gain is -1 (bypass)
+        if pgaGain == -1:
+            gainSetting = 0b000
+            pgaBypass = 0b1  # Bypass the PGA
+        elif AIN_Negative == -1:
+            gainSetting = 0b000
+            pgaBypass = 0b1  # Single ended measurements always need PGA bypassed
+        else:
+            gainSetting = GAIN_SETTING[pgaGain]
+            pgaBypass = 0b0
 
+        reg0 = (reg0 & 0xF0) | (gainSetting << 1) | pgaBypass
         self.writeRegister(0, bytes([reg0]))
+
+        # Check for a successful write by reading the register back
         check = self.readRegister(0)
         if check[0] != reg0:
             print(f"Failed to set MUX channel {channel}. Expected {reg0:#04x}, got {check[0]:#04x}")
+            return False
         else:
             self.activePosPin = channel[0]
             self.activeNegPin = channel[1]
+        return True
+
+    def setCurrentSource(self,
+                         idacNum: int,
+                         channel: int, 
+                         current: int) -> None:
+        """Set up an IDAC on the ADS112C04, routed to a specified channel
+        idacNum is 1 or 2
+        channel is IDAC output channel
+        current is restricted to numbers in IDAC_CURRENT
+        Reg2: [2,0] = IDAC current, shared between IDAC1 and IDAC2
+        Reg3: [7:5] = IDAC1 channel
+              [4:2] = IDAC2 channel
+        """
+        if current not in IDAC_CURRENT:
+            raise ValueError(f"Failed to set IDAC, invalid IDAC current: {current}uA")
+        if channel not in IDAC_CODES:
+            raise ValueError(f"Failed to set IDAC, invalid channel code: {channel}")
+        if idacNum not in (1,2):
+            raise ValueError(f"Failed to set IDAC, identifier IDAC{idacNum} does not exist.")
+
+        reg2 = self.readRegister(2)[0]
+        reg2 = (reg2 & 0xF8) | IDAC_CURRENT[current]
+        self.writeRegister(2, bytes([reg2])) # Set IDAC current (will also change current for other IDAC, be careful)
+
+        reg3 = self.readRegister(3)[0]
+        if idacNum == 1:
+            reg3 = (reg3 & 0x1F) | (IDAC_CODES[channel] << 5)
+        else:
+            reg3 = (reg3 & 0xE3) | (IDAC_CODES[channel] << 2)
+        self.writeRegister(3, bytes([reg3])) # Route IDAC to channel
 
     def getReading(self,
-                           AIN_Pos: int,
-                           AIN_Neg: int = -1,
-                           pgaGain: int = -1,
-                           ) -> float:
+                   AIN_Pos: int,
+                   AIN_Neg: int = -1,
+                   pgaGain: int = -1) -> float | None:
         """Get a single-ended conversion from the specified channel and returns a voltage.
+        IMPORTANT: Function divides by pgaGain to give real voltage.
 
         This function configures the ADS1112 to perform a single-ended conversion on the specified channel
         and returns the conversion result. Defaults to GND for the negative input if not specified.
@@ -184,6 +259,14 @@ class ADS112C04:
         Then, if in single-shot mode, kick off the conversion by writing to the START/SYNC register.
 
         """
+
+        if self.updatingInternalTemp == True:
+            return None
+        
+        # next reading after internal temp read must be skipped due to cached temp in buffer
+        if self.skipReading == True:
+            self.skipReading = False
+            return None
 
         # Set the MUX register to select the proper channel if it is not already set
         if self.activePosPin != AIN_Pos or self.activeNegPin != AIN_Neg:
@@ -222,6 +305,69 @@ class ADS112C04:
         voltage = self._bitsToVoltage(buf[0], buf[1], vref=self.vref)
 
         return voltage
+    
+    async def _updateInternalTemp(self) -> None:
+        """
+        Updates the cached internal temperature for the ADC.
+        Reading takes ~50ms, so this should only be called when needed.
+        """
+        try:
+            self.updatingInternalTemp = True
+            self.skipReading = True # next reading after internal temp read must be skipped due to cached temp in buffer
+            
+            if self.mode != "SINGLE_SHOT": #TODO add single shot mode function
+                self.mode = "SINGLE_SHOT"
+
+            reg1 = self.readRegister(1)[0]
+            reg1 = (reg1 & 0xFE) | 0x01 # Enable temperature sensor
+            reg1 = reg1 & ~0x08 # Set single-shot mode
+            self.writeRegister(1, bytes([reg1]))
+
+            # Start the temperature sensor conversion
+            self.start()
+
+            await asyncio.sleep_ms(75) # type: ignore
+
+            # Now send the first I2C frame which writes the RDATA command to the device.
+            rdataCommand = bytes([0x10])     # RDATA command is 0001 0000
+            self._addressDevice(read=False)  # Address the device for writing
+            self.i2c.write(rdataCommand)     # Send the RDATA command
+
+            # Now re-address the device for reading and it will return the conversion result.
+            self._addressDevice(read=True)  # Address the device for reading
+
+            # This is a 16-bit result, so the device will return two transmissions. The first is the MSB and the second is
+            # the LSB. We read them separately so that we acknowledge the first byte and then read the second byte.
+            buf = bytearray(2)  # Buffer to hold the read data
+            self.i2c.readinto(buf)  # Read the 2 bytes of data into
+            self.i2c.stop()  # Stop the I2C transmission and pull the
+
+            # String together the bits of the bytearray for debugging. Unused for now.
+            bitString = " ".join(f"0b{byte:08b}" for byte in buf)
+            # print(f"Read from ADS112C04: {bitString}")
+
+            reg1 = reg1 & ~0x01 # Disable temperature sensor
+            self.writeRegister(1, bytes([reg1]))
+
+            # Convert the raw ADC bits to temperature (C)
+            self.internalTemp = self._bitsToTemperature(buf[0], buf[1])
+        except Exception as e:
+            print(f"_updateInternalTemp exception: {e}")
+        finally:
+            self.updatingInternalTemp = False
+    
+    def getInternalTemp(self) -> float:
+        """Get the temperature reading from the internal temperature sensor.
+        If temperature is currently updating, returns last cached temp"""
+
+        if (time.ticks_diff(time.ticks_ms(), self.prevInternalTemp_ms) > 10000 #type: ignore Only update temp after 10 seconds
+            and self.updatingInternalTemp == False):
+            
+            self.updatingInternalTemp = True
+            asyncio.create_task(self._updateInternalTemp()) # Start update task without waiting for return
+            self.prevInternalTemp_ms = time.ticks_ms() #type: ignore
+
+        return self.internalTemp
 
     def writeRegister(self, register: int, value: bytes) -> None:
         """Write a value to a specific register of the ADS112 device.
@@ -233,7 +379,10 @@ class ADS112C04:
         # The WREG command is structured like: 0100 rrxx dddd dddd
         # Where rr is the register address and dddd dddd is the data to write.
         # This is sent in two parts: the command - 0100 rrxx, and the data - dddd dddd
-        wreg = 0x40 | ((register & 0x03) << 2)  # We know register only 0-3, so mask with 0x03 then shift to correct position.
+        if register not in (0,1,2,3):
+            raise ValueError(f"Attempted to write to invalid register: reg{register}")
+        
+        wreg = 0x40 | (register << 2)  # Shift register to correct position.
         wregBytes = bytes([wreg])  # Convert to bytes for I2C write
 
         self._addressDevice(read=False)
@@ -255,6 +404,9 @@ class ADS112C04:
         :return: The value read from the register.
         """
 
+        if register not in (0,1,2,3):
+            raise ValueError(f"Attempted to read from invalid register: reg{register}")
+        
         buf = bytearray(1)  # Buffer to hold the read data
 
         # The RREG command is structured like: 0010 rrxx
@@ -290,7 +442,6 @@ class ADS112C04:
             check = self.readRegister(0)
             if check[0] != reg0:
                 raise ValueError("Failed to disable PGA (bypass).")
-            print("PGA bypass enabled (disabled).")
             self.pgaGain = -1  # For calculations, PGA is bypassed (gain=1)
             return
 
@@ -310,7 +461,6 @@ class ADS112C04:
         if check[0] != reg0:
             raise ValueError("Failed to set PGA gain.")
 
-        print(f"Successfully set PGA gain to {gain}.")
         self.pgaGain = gain  # Update the instance variable
 
     def benchmarkReadings(self,
@@ -378,3 +528,14 @@ class ADS112C04:
         voltage = raw * (vref / 2**15) / abs(self.pgaGain)
         return voltage
 
+    def _bitsToTemperature(self,
+                           msb: int,
+                           lsb: int) -> float:
+        """Convert the raw ADC bits to a temperature.
+        To be used with the internal temperature sensor of the ADS112C04"""
+        raw = (msb << 8) | lsb  # Combine MSB and LSB
+        raw = raw >> 2 # 14 bit left-aligned reading
+        if raw & 0x2000:  # If the sign bit is set
+            raw -= 1 << 14  # Convert to negative value
+        temperature = raw / 0x20
+        return temperature
