@@ -21,7 +21,7 @@ static qret_protocol_ret s_pack_header(uint8_t buffer[], size_t header_len, cons
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (header_len != HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     buffer[0] = header_data->protocol_version;
@@ -45,7 +45,7 @@ static qret_protocol_ret s_unpack_header(const uint8_t buffer[], size_t header_l
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (header_len != HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     if (buffer[0] != QRET_PROTOCOL_VERSION) {
         return PROTOCOL_VERSION_MISMATCH_ERR;
@@ -83,10 +83,10 @@ qret_protocol_ret make_header_only_packet(uint8_t buffer[], size_t *packet_len, 
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (!s_is_packet_header_only(packet_type)) {
-        return PROTOCOL_INVALID_PACKET_TYPE;
+        return PROTOCOL_INVALID_PACKET_TYPE_ERR;
     }
     if (*packet_len < HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = HEADER_SIZE;
 
@@ -112,7 +112,7 @@ qret_protocol_ret make_ack_packet(uint8_t buffer[], size_t *packet_len, const qr
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < ACK_PACKET_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = ACK_PACKET_SIZE;
 
@@ -143,7 +143,7 @@ qret_protocol_ret make_nack_packet(uint8_t buffer[], size_t *packet_len, const q
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < NACK_PACKET_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = NACK_PACKET_SIZE;
 
@@ -174,7 +174,7 @@ qret_protocol_ret make_stream_start_packet(uint8_t buffer[], size_t *packet_len,
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < STREAM_START_PACKET_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = STREAM_START_PACKET_SIZE;
 
@@ -204,7 +204,7 @@ qret_protocol_ret make_control_packet(uint8_t buffer[], size_t *packet_len, cons
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < CONTROL_PACKET_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = CONTROL_PACKET_SIZE;
 
@@ -234,7 +234,7 @@ qret_protocol_ret make_status_packet(uint8_t buffer[], size_t *packet_len, const
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < STATUS_PACKET_SIZE(status->control_count)) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = STATUS_PACKET_SIZE(status->control_count);
 
@@ -269,7 +269,7 @@ qret_protocol_ret make_data_packet(uint8_t buffer[], size_t *packet_len, const q
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (*packet_len < DATA_PACKET_SIZE(data->sensor_count)) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = DATA_PACKET_SIZE(data->sensor_count);
 
@@ -314,7 +314,7 @@ qret_protocol_ret make_config_packet(uint8_t buffer[], size_t *packet_len, const
         packet_data_len--; // Remove null terminator from json_config
     }
     if (*packet_len < CONFIG_PACKET_SIZE(packet_data_len)) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
     *packet_len = CONFIG_PACKET_SIZE(packet_data_len);
 
@@ -348,7 +348,7 @@ qret_protocol_ret get_packet_len(const uint8_t buffer[], size_t buffer_len, uint
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (buffer_len < HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     qret_protocol_ret ret;
@@ -368,7 +368,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (buffer_len < HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     qret_protocol_ret ret;
@@ -379,7 +379,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         return ret;
     }
     if (buffer_len < header_data.packet_length) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     // Tag the packet type
@@ -388,10 +388,10 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
     switch (header_data.packet_type) {
     case PT_ACK:
         if (header_data.packet_length != ACK_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         if (buffer[HEADER_SIZE + 2] != ERR_NONE) {
-            return PROTOCOL_INVALID_PACKET_TYPE;
+            return PROTOCOL_INVALID_PACKET_TYPE_ERR;
         }
         payload->payload_data.ack.ack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.ack.ack_sequence = buffer[HEADER_SIZE + 1];
@@ -400,7 +400,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         break;
     case PT_NACK:
         if (header_data.packet_length != NACK_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.nack.nack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.nack.nack_sequence = buffer[HEADER_SIZE + 1];
@@ -411,7 +411,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
     case PT_STATUS:
         uint8_t control_count = buffer[HEADER_SIZE + 1];
         if (header_data.packet_length != STATUS_PACKET_SIZE(control_count)) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.status.device_status = buffer[HEADER_SIZE + 0];
         payload->payload_data.status.control_count = buffer[HEADER_SIZE + 1];
@@ -427,7 +427,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
     case PT_DATA:
         uint8_t sensor_count = buffer[HEADER_SIZE + 0];
         if (header_data.packet_length != DATA_PACKET_SIZE(sensor_count)) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.data.sensor_count = sensor_count;
 
@@ -447,7 +447,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
         uint32_t data_len = (uint32_t)(buffer[HEADER_SIZE + 0] << 24) | (uint32_t)(buffer[HEADER_SIZE + 1] << 16) |
                             (uint32_t)(buffer[HEADER_SIZE + 2] << 8) | (uint32_t)buffer[HEADER_SIZE + 3];
         if (header_data.packet_length != CONFIG_PACKET_SIZE(data_len)) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.config.json_config_len = data_len;
 
@@ -455,7 +455,7 @@ qret_protocol_ret server_parse_packet(const uint8_t buffer[], size_t buffer_len,
 
         break;
     default:
-        return PROTOCOL_INVALID_PACKET_TYPE;
+        return PROTOCOL_INVALID_PACKET_TYPE_ERR;
     }
 
     return PROTOCOL_OK;
@@ -466,7 +466,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         return PROTOCOL_NULL_PTR_ERR;
     }
     if (buffer_len < HEADER_SIZE) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     qret_protocol_ret ret;
@@ -477,7 +477,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         return ret;
     }
     if (buffer_len < header_data.packet_length) {
-        return PROTOCOL_ARRAY_LEN_ERR;
+        return PROTOCOL_BUFFER_LEN_ERR;
     }
 
     // Tag the packet type
@@ -492,17 +492,17 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
     case PT_HEARTBEAT:
     case PT_STATUS_REQUEST:
         if (header_data.packet_length != HEADER_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.header_only.sequence = header_data.sequence;
         payload->payload_data.header_only.timestamp = header_data.timestamp;
         break;
     case PT_ACK:
         if (header_data.packet_length != ACK_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         if (buffer[HEADER_SIZE + 2] != ERR_NONE) {
-            return PROTOCOL_INVALID_PACKET_TYPE;
+            return PROTOCOL_INVALID_PACKET_TYPE_ERR;
         }
         payload->payload_data.ack.ack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.ack.ack_sequence = buffer[HEADER_SIZE + 1];
@@ -511,7 +511,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         break;
     case PT_NACK:
         if (header_data.packet_length != NACK_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.nack.nack_packet_type = buffer[HEADER_SIZE + 0];
         payload->payload_data.nack.nack_sequence = buffer[HEADER_SIZE + 1];
@@ -521,7 +521,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         break;
     case PT_STREAM_START:
         if (header_data.packet_length != STREAM_START_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.stream_start.stream_frequency = ((uint16_t)buffer[HEADER_SIZE + 0] << 8) |
                                                               (uint16_t)buffer[HEADER_SIZE + 1];
@@ -530,7 +530,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         break;
     case PT_CONTROL:
         if (header_data.packet_length != CONTROL_PACKET_SIZE) {
-            return PROTOCOL_ARRAY_LEN_ERR;
+            return PROTOCOL_BUFFER_LEN_ERR;
         }
         payload->payload_data.control.command_id = buffer[HEADER_SIZE + 0];
         payload->payload_data.control.command_state = buffer[HEADER_SIZE + 1];
@@ -538,7 +538,7 @@ qret_protocol_ret client_parse_packet(const uint8_t buffer[], size_t buffer_len,
         payload->payload_data.control.header.timestamp = header_data.timestamp;
         break;
     default:
-        return PROTOCOL_INVALID_PACKET_TYPE;
+        return PROTOCOL_INVALID_PACKET_TYPE_ERR;
     }
 
     return PROTOCOL_OK;

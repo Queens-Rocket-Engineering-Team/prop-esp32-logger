@@ -19,10 +19,9 @@ static const char *TAG = "MAIN";
 
 void app_main(void) {
 
-    static network_ctx_t network_ctx = {0};
     static app_ctx_t app_ctx = {0};
 
-    ESP_ERROR_CHECK(app_setup(&app_ctx, &network_ctx));
+    ESP_ERROR_CHECK(app_setup(&app_ctx));
     ESP_LOGI(TAG, "Setup complete");
 
     // reset watchdog timer
@@ -33,15 +32,16 @@ void app_main(void) {
 
     while (1) {
 
-        EventBits_t wifi_bits = xEventGroupGetBits(network_ctx.wifi_event_group_handle);
+        EventBits_t wifi_bits = xEventGroupGetBits(app_ctx.network_ctx->wifi_event_group_handle);
         EventBits_t stream_bits = xEventGroupGetBits(app_ctx.sensor_stream_event_group_handle);
 
+        // disable data stream if disconnected
         if ((stream_bits & SENSOR_STREAM_ENABLE_BIT) && !(wifi_bits & SERVER_CONNECTED_BIT)) {
             xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
             ESP_LOGI(TAG, "Sensor stream stopped");
         }
-
-        if (!network_ctx.config_sent && (wifi_bits & SERVER_CONNECTED_BIT)) {
+        // send config on connection
+        if (!app_ctx.network_ctx->config_sent && (wifi_bits & SERVER_CONNECTED_BIT)) {
             last_packet_time_us = esp_timer_get_time();
             payload_out.packet_type = PT_CONFIG;
 
@@ -57,10 +57,10 @@ void app_main(void) {
             };
             payload_out.payload_data.config = config;
 
-            xQueueSend(network_ctx.tcp_send_queue_handle, (void *)&payload_out, 0);
-            network_ctx.config_sent = true;
+            xQueueSend(app_ctx.network_ctx->tcp_send_queue_handle, (void *)&payload_out, 0);
+            app_ctx.network_ctx->config_sent = true;
         }
-
+        // reset all controls to default state when watchdog timeout triggers
         if (esp_timer_get_time() - last_packet_time_us > WATCHDOG_RESET_TIMEOUT_US) {
             for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                 control_set_default(&app_ctx.controls[i]);
@@ -69,19 +69,18 @@ void app_main(void) {
             ESP_LOGW(TAG, "Software watchdog triggered, reset to default state");
             last_packet_time_us = esp_timer_get_time();
         }
-
-        if (xQueueReceive(network_ctx.tcp_recv_queue_handle, &payload_in, pdMS_TO_TICKS(100)) == pdTRUE) {
+        // check for incoming packets from the tcp recv queue
+        if (xQueueReceive(app_ctx.network_ctx->tcp_recv_queue_handle, &payload_in, pdMS_TO_TICKS(100)) == pdTRUE) {
 
             last_packet_time_us = esp_timer_get_time();
 
             switch (payload_in.packet_type) {
-            case PT_ESTOP: {
+            case PT_ESTOP:
                 for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                     control_set_default(&app_ctx.controls[i]);
                 }
                 xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
                 ESP_LOGW(TAG, "Received ESTOP, reset to default state");
-            }
                 continue;
 
             case PT_TIMESYNC: {
@@ -108,7 +107,7 @@ void app_main(void) {
             case PT_CONTROL: {
                 uint8_t i = payload_in.payload_data.control.command_id;
                 esp_err_t err = ESP_FAIL;
-                qret_packet_err nack_error_code = ERR_HARDWARE_FAULT;
+                qret_err_code nack_error_code = ERR_HARDWARE_FAULT;
 
                 if (i < CONFIG_NUM_CONTROLS) {
                     if (payload_in.payload_data.control.command_state == CS_OPEN) {
@@ -273,8 +272,8 @@ void app_main(void) {
                 ESP_LOGE(TAG, "Invalid client packet type recieved: %d", payload_in.packet_type);
                 continue;
             }
-
-            xQueueSend(network_ctx.tcp_send_queue_handle, (void *)&payload_out, MESSAGE_QUEUE_TIMEOUT);
+            // send the packet out to the tcp send queue
+            xQueueSend(app_ctx.network_ctx->tcp_send_queue_handle, (void *)&payload_out, MESSAGE_QUEUE_TIMEOUT);
         }
     }
 }

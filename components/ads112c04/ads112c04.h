@@ -42,7 +42,13 @@ uint8_t ads112c04_get_address(const ads112c04_t *ads112c04);
 bool ads112c04_is_gain_valid(uint8_t gain);
 bool ads112c04_is_mux_valid(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin);
 
-esp_err_t ads112c04_set_inputs(ads112c04_t *ads112c04, ads112c04_pin_t p_pin, ads112c04_pin_t n_pin, uint8_t gain, bool pga_enabled);
+esp_err_t ads112c04_set_inputs(
+    ads112c04_t *ads112c04,
+    ads112c04_pin_t p_pin,
+    ads112c04_pin_t n_pin,
+    uint8_t gain,
+    bool pga_enabled
+);
 
 esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04);
 

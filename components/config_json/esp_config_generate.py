@@ -12,7 +12,7 @@ def read_json(file_path: str) -> tuple[dict, str]:
         raise
     
 
-parser = argparse.ArgumentParser(description="Convert JSON config to .h header")
+parser = argparse.ArgumentParser(description="Convert JSON config to c constants and initialization code")
 parser.add_argument('config', type=str)
 parser.add_argument('mapping', type=str)
 parser.add_argument('header', type=str)
@@ -98,6 +98,7 @@ except Exception as e:
 
 # .c file generation
 
+# template for mapping between values in the json config and corresponding c sensor config structs
 sensor_templates = {
     'thermocouple': {
         'type_enum': 'THERMOCOUPLE',
@@ -176,7 +177,7 @@ sensor_templates = {
         },
     },
 }
-
+# json name to c enum for controls
 control_fields = {
     'default_state': {
         'open': 'CONTROL_OPEN',
@@ -215,6 +216,7 @@ def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, inde
     adc_key = pin_map['ADC_index']
     adc_addr = mapping['ADC_map'][adc_key]['addr']
 
+    # get the required config fields from the sensor template
     cfg_struct_fields = []
     for struct_field, json_key in template['cfg_struct_fields'].items():
 

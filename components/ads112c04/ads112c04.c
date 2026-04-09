@@ -162,7 +162,7 @@ static float s_bits_to_voltage(ads112c04_t *ads112c04, int16_t raw_data) {
 
 // convert rdata bits to temperature
 static float s_bits_to_temperature(int16_t raw_data) {
-    raw_data = raw_data >> 2;                 // 14 bit left-aligned reading
+    raw_data = raw_data >> 2;             // 14 bit left-aligned reading
     float temperature = raw_data / 32.0f; // Divide for temp resolution
     return temperature;
 }
@@ -186,7 +186,9 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
         return ESP_ERR_INVALID_ARG;
     }
     ads112c04->addr = ads112c04_cfg->addr;
-    ESP_RETURN_ON_ERROR(s_init_i2c(ads112c04, ads112c04_cfg->bus_handle, ads112c04_cfg->bus_frequency), TAG, "I2C init failed");
+    ESP_RETURN_ON_ERROR(
+        s_init_i2c(ads112c04, ads112c04_cfg->bus_handle, ads112c04_cfg->bus_frequency), TAG, "I2C init failed"
+    );
 
     // initialize conversion binary semaphore
     ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
@@ -205,7 +207,9 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config for DRDY failed");
 
     ESP_RETURN_ON_ERROR(
-        gpio_isr_handler_add(ads112c04_cfg->drdy_pin, drdy_isr_handler, (void *)ads112c04), TAG, "Failed to add GPIO to ISR handler"
+        gpio_isr_handler_add(ads112c04_cfg->drdy_pin, drdy_isr_handler, (void *)ads112c04),
+        TAG,
+        "Failed to add GPIO to ISR handler"
     );
 
     s_send_command(ads112c04, RESET);
@@ -215,9 +219,9 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
     uint8_t reg1 = 0;
     reg1 |= (0x06 << 5) & DR_MASK; // set to 1000SPS
     reg1 |= (0x01 << 4) & MODE_MASK;
-    reg1 |= (0x00 << 3) & CM_MASK; // set to single shot mode
+    reg1 |= (0x00 << 3) & CM_MASK;   // set to single shot mode
     reg1 |= (0x02 << 1) & VREF_MASK; // set ref voltage to AVDD-AVSS
-    reg1 |= 0x00 & TS_MASK; // disable temperature sensor mode
+    reg1 |= 0x00 & TS_MASK;          // disable temperature sensor mode
     ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 1, reg1), TAG, "Failed to write reg1");
 
     // set default ADC settings
@@ -246,7 +250,13 @@ bool ads112c04_is_mux_valid(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin) {
     return true;
 }
 
-esp_err_t ads112c04_set_inputs(ads112c04_t *ads112c04, ads112c04_pin_t p_pin, ads112c04_pin_t n_pin, uint8_t gain, bool pga_enabled) {
+esp_err_t ads112c04_set_inputs(
+    ads112c04_t *ads112c04,
+    ads112c04_pin_t p_pin,
+    ads112c04_pin_t n_pin,
+    uint8_t gain,
+    bool pga_enabled
+) {
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
@@ -323,7 +333,7 @@ esp_err_t ads112c04_get_single_voltage_reading(
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore
+    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore without waiting
     ESP_RETURN_ON_ERROR(ads112c04_set_single_shot(ads112c04), TAG, "Set single shot failed");
     ESP_RETURN_ON_ERROR(ads112c04_set_inputs(ads112c04, p_pin, n_pin, gain, pga_enabled), TAG, "Set inputs failed");
 
@@ -346,7 +356,7 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore
+    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore without waiting
     ESP_RETURN_ON_ERROR(ads112c04_set_single_shot(ads112c04), TAG, "Set single shot failed");
     ESP_RETURN_ON_ERROR(s_enable_internal_temperature(ads112c04), TAG, "Failed to enable internal temperature sensor");
 
@@ -359,7 +369,9 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
 
     int16_t raw_data = 0;
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
-    ESP_RETURN_ON_ERROR(s_disable_internal_temperature(ads112c04), TAG, "Failed to disable internal temperature sensor");
+    ESP_RETURN_ON_ERROR(
+        s_disable_internal_temperature(ads112c04), TAG, "Failed to disable internal temperature sensor"
+    );
 
     *temperature = s_bits_to_temperature(raw_data);
     return ESP_OK;

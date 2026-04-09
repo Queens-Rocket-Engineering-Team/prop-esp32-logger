@@ -25,6 +25,9 @@ typedef struct {
     resistance_sensor_unit_t unit;
 } resistance_sensor_config_t;
 
-esp_err_t resistance_sensor_init(resistance_sensor_t *resistance_sensor, const resistance_sensor_config_t *resistance_sensor_cfg);
+esp_err_t resistance_sensor_init(
+    resistance_sensor_t *resistance_sensor,
+    const resistance_sensor_config_t *resistance_sensor_cfg
+);
 
 esp_err_t get_resistance_reading(resistance_sensor_t *resistance_sensor, float *weight);

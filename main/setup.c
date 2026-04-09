@@ -51,8 +51,8 @@ static esp_err_t s_network_setup(network_ctx_t *network_ctx) {
     return ESP_OK;
 }
 
-esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
-    if (app_ctx == NULL || network_ctx == NULL) {
+esp_err_t app_setup(app_ctx_t *app_ctx) {
+    if (app_ctx == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -117,8 +117,9 @@ esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx) {
     app_ctx->ts_offset = 0;
 
     // set up network manager
-    ESP_RETURN_ON_ERROR(s_network_setup(network_ctx), TAG, "Failed to set up network_ctx");
-    app_ctx->network_ctx = network_ctx;
+    static network_ctx_t network_ctx = {0};
+    ESP_RETURN_ON_ERROR(s_network_setup(&network_ctx), TAG, "Failed to set up network_ctx");
+    app_ctx->network_ctx = &network_ctx;
 
     return ESP_OK;
 }

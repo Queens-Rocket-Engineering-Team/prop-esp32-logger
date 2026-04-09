@@ -10,9 +10,9 @@
 typedef enum {
     // Return error codes
     PROTOCOL_OK,
-    PROTOCOL_ARRAY_LEN_ERR,
+    PROTOCOL_BUFFER_LEN_ERR,
     PROTOCOL_NULL_PTR_ERR,
-    PROTOCOL_INVALID_PACKET_TYPE,
+    PROTOCOL_INVALID_PACKET_TYPE_ERR,
     PROTOCOL_VERSION_MISMATCH_ERR,
 } qret_protocol_ret;
 
@@ -69,7 +69,7 @@ typedef enum {
     UNIT_HERTZ = 0x0E,
     UNIT_OHMS = 0x0F,
     UNIT_UNITLESS = 0xFF,
-} qret_units;
+} qret_unit;
 
 typedef enum {
     // Packet error codes
@@ -80,7 +80,7 @@ typedef enum {
     ERR_BUSY = 0x04,
     ERR_NOT_STREAMING = 0x05,
     ERR_INVALID_PARAM = 0x06,
-} qret_packet_err;
+} qret_err_code;
 
 //----------------------------------------------------------
 // Packet sizes
@@ -159,6 +159,8 @@ typedef struct {
     uint8_t nack_sequence;
     uint8_t nack_error_code;
 } qret_nack_packet;
+
+// Variable length packets
 
 typedef struct {
     qret_header header;

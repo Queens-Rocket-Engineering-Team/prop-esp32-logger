@@ -42,7 +42,7 @@ esp_err_t ssdp_discover_server(int32_t *sock, char server_ip[], size_t server_ip
         goto cleanup;
     }
 
-    int enable = 1;
+    int32_t enable = 1;
     err = setsockopt(*sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof enable);
     if (err != 0) {
         ret = ESP_FAIL;

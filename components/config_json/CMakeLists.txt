@@ -25,7 +25,7 @@ add_custom_command(
             "${CONFIG_SOURCE}"
     DEPENDS "${CONFIG}" "${MAPPING}" "${CONFIG_CONVERT}"
     VERBATIM
-    COMMENT "Generating esp_config_json"
+    COMMENT "Generating config_json component"
 )
 
 set_source_files_properties("${CONFIG_SOURCE}" PROPERTIES GENERATED TRUE)

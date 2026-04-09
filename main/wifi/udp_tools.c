@@ -8,7 +8,7 @@
 #include "qret_protocol.h"
 #include "wifi_tools.h"
 
-#define TX_BUFFER_LEN 8192
+#define TX_BUFFER_LEN 2048
 
 static const char *TAG = "UDP";
 
@@ -94,5 +94,6 @@ void udp_client_send(void *pvParams) {
             continue;
         }
         ESP_LOGD(TAG, "Outgoing packet len: %d", len_sent);
+        ESP_LOG_BUFFER_HEXDUMP(TAG, tx_buffer, len_sent, ESP_LOG_DEBUG);
     }
 }

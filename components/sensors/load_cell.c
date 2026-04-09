@@ -34,7 +34,7 @@ esp_err_t get_load_cell_reading(load_cell_t *load_cell, float *weight) {
     if (load_cell == NULL || weight == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    
+
     float voltage = 0;
     ESP_RETURN_ON_ERROR(
         sensor_voltage_reading(&load_cell->sensor, &voltage), TAG, "Failed to get load cell voltage reading"

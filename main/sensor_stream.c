@@ -15,9 +15,9 @@
 #include "sensor_stream.h"
 #include "setup.h"
 
-static const char *TAG = "SENSOR STREAM";
-
 #define MAX_FREQUENCY 100
+
+static const char *TAG = "SENSOR STREAM";
 
 void sensor_stream(void *pvParams) {
     app_ctx_t *app_ctx = (app_ctx_t *)pvParams;
@@ -139,12 +139,14 @@ void sensor_stream(void *pvParams) {
                        .timestamp = timestamp,
                        },
         };
-
+        // send data packets to the udp send queue
         xQueueSend(app_ctx->network_ctx->udp_send_queue_handle, (void *)&data_packet, MESSAGE_QUEUE_TIMEOUT);
 
+        // if single reading, clear bit to avoid relooping
         if (xEventGroupGetBits(app_ctx->sensor_stream_event_group_handle) & SENSORS_SINGLE_READING_BIT) {
             xEventGroupClearBits(app_ctx->sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
         } else {
+            // xTaskDelayUntil accounts for time taken to read sensors
             xTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(period_ms));
         }
     }

@@ -12,6 +12,8 @@
 #define RX_BUFFER_LEN 2048
 #define TX_BUFFER_LEN 8192
 
+#define SERVER_SOCKET_TIMEOUT_S 15
+
 static const char *TAG = "TCP";
 
 esp_err_t tcp_connect_to_server(int32_t *sock, const char server_ip[], uint16_t server_port) {
@@ -45,7 +47,7 @@ esp_err_t tcp_connect_to_server(int32_t *sock, const char server_ip[], uint16_t 
         goto cleanup;
     }
 
-    int enable = 1;
+    int32_t enable = 1;
     err = setsockopt(*sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(enable));
     if (err != 0) {
         ret = ESP_FAIL;
@@ -123,7 +125,7 @@ void tcp_client_recv(void *pvParams) {
             // recieve the rest of the packet if not header only
             data_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer + HEADER_SIZE, packet_len, MSG_WAITALL);
             if (data_len_recv < 0) {
-                if (errno = EAGAIN) {
+                if (errno == EAGAIN) {
                     ESP_LOGE(TAG, "TCP socket timed out");
                 } else {
                     ESP_LOGE(TAG, "recv failed: errno %d", errno);

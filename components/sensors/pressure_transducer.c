@@ -44,7 +44,9 @@ esp_err_t get_pressure_reading(pressure_transducer_t *pressure_transducer, float
     }
     float voltage = 0;
     ESP_RETURN_ON_ERROR(
-        sensor_voltage_reading(&pressure_transducer->sensor, &voltage), TAG, "Failed to get pressure transducer voltage reading"
+        sensor_voltage_reading(&pressure_transducer->sensor, &voltage),
+        TAG,
+        "Failed to get pressure transducer voltage reading"
     );
 
     float current_mA = 1000 * voltage / pressure_transducer->resistor_ohms;

@@ -9,8 +9,6 @@
 
 #include "qret_protocol.h"
 
-#define SERVER_SOCKET_TIMEOUT_S 15
-
 #define MESSAGE_QUEUE_TIMEOUT (pdMS_TO_TICKS(10))
 
 #define SERVER_CONNECTED_BIT 1

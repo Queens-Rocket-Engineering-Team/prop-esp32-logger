@@ -21,4 +21,4 @@ typedef struct {
     i2c_master_bus_handle_t bus_handle;
 } app_ctx_t;
 
-esp_err_t app_setup(app_ctx_t *app_ctx, network_ctx_t *network_ctx);
+esp_err_t app_setup(app_ctx_t *app_ctx);

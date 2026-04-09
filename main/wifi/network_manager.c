@@ -136,7 +136,7 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
         .pin_bit_mask = (1ULL << CONFIG_WIFI_INDICATOR_PIN),
         .mode = GPIO_MODE_OUTPUT,
         .intr_type = GPIO_INTR_DISABLE,
-        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
     };
     ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config for wifi indicator failed");
