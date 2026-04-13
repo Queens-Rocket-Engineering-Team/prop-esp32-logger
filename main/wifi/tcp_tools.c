@@ -5,7 +5,7 @@
 #include <sys/socket.h>
 
 #include "config_json.h"
-#include "qret_protocol.h"
+#include "qwcp_lib.h"
 #include "setup.h"
 #include "wifi_tools.h"
 
@@ -88,9 +88,9 @@ void tcp_client_recv(void *pvParams) {
 
     static uint8_t rx_buffer[RX_BUFFER_LEN] = {0};
     static uint16_t packet_len = 0;
-    static qret_client_payload payload = {0};
+    static qwcp_client_payload payload = {0};
 
-    qret_protocol_ret ret = PROTOCOL_OK;
+    qwcp_lib_ret ret = QWCP_OK;
 
     while (1) {
         // only pause when server is disconnected
@@ -99,7 +99,7 @@ void tcp_client_recv(void *pvParams) {
         );
 
         // get the full header from a packet
-        int32_t header_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer, HEADER_SIZE, MSG_WAITALL);
+        int32_t header_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer, QWCP_HEADER_SIZE, MSG_WAITALL);
         if (header_len_recv < 0) {
             if (errno == EAGAIN) {
                 ESP_LOGE(TAG, "TCP socket timed out");
@@ -114,16 +114,16 @@ void tcp_client_recv(void *pvParams) {
             continue;
         }
 
-        get_packet_len(rx_buffer, HEADER_SIZE, &packet_len);
+        qwcp_get_packet_len(&packet_len, rx_buffer, sizeof(rx_buffer));
         int32_t data_len_recv = 0;
 
-        if (packet_len - HEADER_SIZE > 0) {
+        if (packet_len - QWCP_HEADER_SIZE > 0) {
             if (packet_len > sizeof(rx_buffer)) {
                 ESP_LOGE(TAG, "rx_buffer ran out of space: packet len %d", packet_len);
                 break;
             }
             // recieve the rest of the packet if not header only
-            data_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer + HEADER_SIZE, packet_len, MSG_WAITALL);
+            data_len_recv = recv(network_ctx->server_tcp_sock, rx_buffer + QWCP_HEADER_SIZE, packet_len, MSG_WAITALL);
             if (data_len_recv < 0) {
                 if (errno == EAGAIN) {
                     ESP_LOGE(TAG, "TCP socket timed out");
@@ -143,8 +143,8 @@ void tcp_client_recv(void *pvParams) {
         ESP_LOG_BUFFER_HEXDUMP(TAG, rx_buffer, header_len_recv + data_len_recv, ESP_LOG_DEBUG);
 
         // parse and send packet data for processing
-        ret = client_parse_packet(rx_buffer, sizeof(rx_buffer), &payload);
-        if (ret != PROTOCOL_OK) {
+        ret = qwcp_decode_server_to_client(&payload, rx_buffer, sizeof(rx_buffer));
+        if (ret != QWCP_OK) {
             ESP_LOGE(TAG, "QRET protocol err:", ret);
         }
         xQueueSend(network_ctx->tcp_recv_queue_handle, (void *)&payload, MESSAGE_QUEUE_TIMEOUT);
@@ -155,9 +155,9 @@ void tcp_client_send(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
-    static qret_server_payload payload = {0};
+    static qwcp_server_payload payload = {0};
 
-    qret_protocol_ret ret = PROTOCOL_OK;
+    qwcp_lib_ret ret = QWCP_OK;
 
     while (1) {
         // only pause when server is disconnected
@@ -174,27 +174,28 @@ void tcp_client_send(void *pvParams) {
 
         // convert packet struct to bytes depending on type
         switch (payload.packet_type) {
-        case PT_CONFIG:
-            ret = make_config_packet(tx_buffer, &packet_len, &payload.payload_data.config);
+        case QWCP_PT_CONFIG:
+            ret = qwcp_encode_config(tx_buffer, &packet_len, &payload.payload_data.config);
             break;
-        case PT_DATA:
-            make_data_packet(tx_buffer, &packet_len, &payload.payload_data.data);
+        case QWCP_PT_DATA:
+            ret = qwcp_encode_data(tx_buffer, &packet_len, &payload.payload_data.data);
             break;
-        case PT_STATUS:
-            make_status_packet(tx_buffer, &packet_len, &payload.payload_data.status);
+        case QWCP_PT_STATUS:
+            ret = qwcp_encode_status(tx_buffer, &packet_len, &payload.payload_data.status);
             break;
-        case PT_ACK:
-            make_ack_packet(tx_buffer, &packet_len, &payload.payload_data.ack);
+        case QWCP_PT_ACK:
+            ret = qwcp_encode_ack(tx_buffer, &packet_len, &payload.payload_data.ack);
             break;
-        case PT_NACK:
-            make_nack_packet(tx_buffer, &packet_len, &payload.payload_data.nack);
+        case QWCP_PT_NACK:
+            ret = qwcp_encode_nack(tx_buffer, &packet_len, &payload.payload_data.nack);
             break;
         default:
             ESP_LOGE(TAG, "Attempted to send invalid server packet");
             continue;
         }
-        if (ret != PROTOCOL_OK) {
-            ESP_LOGE(TAG, "QRET protocol err:", ret);
+        if (ret != QWCP_OK) {
+            ESP_LOGE(TAG, "QWCP err:", ret);
+            continue;
         }
 
         int32_t len_sent = send(network_ctx->server_tcp_sock, tx_buffer, packet_len, 0);

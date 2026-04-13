@@ -7,6 +7,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 
+#include "qwcp_lib.h"
 #include "config_json.h"
 #include "wifi_tools.h"
 
@@ -19,13 +20,13 @@
 #define UDP_SEND_STACK_SIZE 4096
 
 #define TCP_RECV_QUEUE_LEN 10
-#define TCP_RECV_QUEUE_ITEM_SIZE sizeof(qret_client_payload)
+#define TCP_RECV_QUEUE_ITEM_SIZE sizeof(qwcp_client_payload)
 
 #define TCP_SEND_QUEUE_LEN 10
-#define TCP_SEND_QUEUE_ITEM_SIZE sizeof(qret_server_payload)
+#define TCP_SEND_QUEUE_ITEM_SIZE sizeof(qwcp_server_payload)
 
 #define UDP_SEND_QUEUE_LEN 10
-#define UDP_SEND_QUEUE_ITEM_SIZE sizeof(qret_data_packet)
+#define UDP_SEND_QUEUE_ITEM_SIZE sizeof(qwcp_data_packet)
 
 static const char *TAG = "NETWORK MANAGER";
 

@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "qret_protocol.h"
+#include "qwcp_lib.h"
 #include "wifi_tools.h"
 
 #define TX_BUFFER_LEN 2048
@@ -67,9 +67,9 @@ void udp_client_send(void *pvParams) {
     network_ctx_t *network_ctx = (network_ctx_t *)pvParams;
 
     static uint8_t tx_buffer[TX_BUFFER_LEN] = {0};
-    static qret_data_packet data_packet;
+    static qwcp_data_packet data_packet;
 
-    qret_protocol_ret ret = PROTOCOL_OK;
+    qwcp_lib_ret ret = QWCP_OK;
 
     while (1) {
         // only pause when server is disconnected
@@ -83,9 +83,9 @@ void udp_client_send(void *pvParams) {
         size_t packet_len = sizeof(tx_buffer);
 
         // convert packet struct to bytes
-        ret = make_data_packet(tx_buffer, &packet_len, &data_packet);
-        if (ret != PROTOCOL_OK) {
-            ESP_LOGE(TAG, "QRET protocol err:", ret);
+        ret = qwcp_encode_data(tx_buffer, &packet_len, &data_packet);
+        if (ret != QWCP_OK) {
+            ESP_LOGE(TAG, "QWCP err:", ret);
         }
 
         int32_t len_sent = send(network_ctx->server_udp_sock, tx_buffer, packet_len, 0);

@@ -7,8 +7,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "qret_protocol.h"
-
 #define MESSAGE_QUEUE_TIMEOUT (pdMS_TO_TICKS(10))
 
 #define SERVER_CONNECTED_BIT 1

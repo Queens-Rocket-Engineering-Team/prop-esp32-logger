@@ -1,4 +1,4 @@
 idf_component_register(
-    SRCS "qret_protocol.c"
+    SRCS "qwcp_lib.c"
     INCLUDE_DIRS .
 )
