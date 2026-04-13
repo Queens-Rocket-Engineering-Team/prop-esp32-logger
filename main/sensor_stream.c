@@ -1,3 +1,4 @@
+#include <esp_check.h>
 #include <esp_err.h>
 #include <esp_log.h>
 #include <esp_timer.h>
@@ -11,14 +12,97 @@
 #include "resistance_sensor.h"
 #include "thermocouple.h"
 
-#include "qwcp_lib.h"
 #include "config_json.h"
+#include "qwcp_lib.h"
 #include "sensor_stream.h"
 #include "setup.h"
 
 #define MAX_FREQUENCY 100
 
 static const char *TAG = "SENSOR STREAM";
+
+static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *value, uint8_t *unit) {
+    if (generic_sensor == NULL || value == NULL || unit == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    switch (generic_sensor->sensor_type) {
+    case THERMOCOUPLE:
+        switch (generic_sensor->sensor.thermocouple.unit) {
+        case THERMOCOUPLE_C:
+            *unit = QWCP_UNIT_CELSIUS;
+            break;
+        case THERMOCOUPLE_K:
+            *unit = QWCP_UNIT_KELVIN;
+            break;
+        case THERMOCOUPLE_F:
+            *unit = QWCP_UNIT_FAHRENHEIT;
+            break;
+        }
+        ESP_RETURN_ON_ERROR(
+            get_thermocouple_reading(&generic_sensor->sensor.thermocouple, value),
+            TAG,
+            "Failed to get thermocouple reading"
+        );
+        break;
+    case PRESSURE_TRANSDUCER:
+        switch (generic_sensor->sensor.pressure_transducer.unit) {
+        case PRESSURE_TRANSDUCER_PSI:
+            *unit = QWCP_UNIT_PSI;
+            break;
+        case PRESSURE_TRANSDUCER_BAR:
+            *unit = QWCP_UNIT_BAR;
+            break;
+        case PRESSURE_TRANSDUCER_PA:
+            *unit = QWCP_UNIT_PASCAL;
+            break;
+        }
+        ESP_RETURN_ON_ERROR(
+            get_pressure_reading(&generic_sensor->sensor.pressure_transducer, value),
+            TAG,
+            "Failed to get pressure transducer reading"
+        );
+        break;
+    case LOAD_CELL:
+        switch (generic_sensor->sensor.load_cell.unit) {
+        case LOAD_CELL_KG:
+            *unit = QWCP_UNIT_KILOGRAMS;
+            break;
+        case LOAD_CELL_N:
+            *unit = QWCP_UNIT_NEWTONS;
+            break;
+        }
+        ESP_RETURN_ON_ERROR(
+            get_load_cell_reading(&generic_sensor->sensor.load_cell, value), TAG, "Failed to get load cell reading"
+        );
+        break;
+    case RESISTANCE_SENSOR:
+        switch (generic_sensor->sensor.resistance_sensor.unit) {
+        case RESISTANCE_SENSOR_OHMS:
+            *unit = QWCP_UNIT_OHMS;
+            break;
+        }
+        ESP_RETURN_ON_ERROR(
+            get_resistance_reading(&generic_sensor->sensor.resistance_sensor, value),
+            TAG,
+            "Failed to get resistance reading"
+        );
+        break;
+    case CURRENT_SENSOR:
+        switch (generic_sensor->sensor.current_sensor.unit) {
+        case CURRENT_SENSOR_A:
+            *unit = QWCP_UNIT_AMPS;
+            break;
+        }
+        ESP_RETURN_ON_ERROR(
+            get_current_reading(&generic_sensor->sensor.current_sensor, value), TAG, "Failed to get current reading"
+        );
+        break;
+    default:
+        return ESP_ERR_INVALID_ARG;
+    }
+    return ESP_OK;
+}
 
 void sensor_stream(void *pvParams) {
     app_ctx_t *app_ctx = (app_ctx_t *)pvParams;
@@ -51,80 +135,10 @@ void sensor_stream(void *pvParams) {
         static qwcp_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 
         for (size_t i = 0; i < CONFIG_NUM_SENSORS; i++) {
-
             data[i].sensor_id = i;
-
-            switch (app_ctx->sensors[i].sensor_type) {
-            case THERMOCOUPLE:
-                switch (app_ctx->sensors[i].sensor.thermocouple.unit) {
-                case THERMOCOUPLE_C:
-                    data[i].unit = QWCP_UNIT_CELSIUS;
-                    break;
-                case THERMOCOUPLE_K:
-                    data[i].unit = QWCP_UNIT_KELVIN;
-                    break;
-                case THERMOCOUPLE_F:
-                    data[i].unit = QWCP_UNIT_FAHRENHEIT;
-                    break;
-                }
-                err = get_thermocouple_reading(&app_ctx->sensors[i].sensor.thermocouple, &data[i].value);
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to get thermocouple reading: %s", esp_err_to_name(err));
-                }
-                break;
-            case PRESSURE_TRANSDUCER:
-                switch (app_ctx->sensors[i].sensor.pressure_transducer.unit) {
-                case PRESSURE_TRANSDUCER_PSI:
-                    data[i].unit = QWCP_UNIT_PSI;
-                    break;
-                case PRESSURE_TRANSDUCER_BAR:
-                    data[i].unit = QWCP_UNIT_BAR;
-                    break;
-                case PRESSURE_TRANSDUCER_PA:
-                    data[i].unit = QWCP_UNIT_PASCAL;
-                    break;
-                }
-                err = get_pressure_reading(&app_ctx->sensors[i].sensor.pressure_transducer, &data[i].value);
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to get pressure transducer reading: %s", esp_err_to_name(err));
-                }
-                break;
-            case LOAD_CELL:
-                switch (app_ctx->sensors[i].sensor.load_cell.unit) {
-                case LOAD_CELL_KG:
-                    data[i].unit = QWCP_UNIT_KILOGRAMS;
-                    break;
-                case LOAD_CELL_N:
-                    data[i].unit = QWCP_UNIT_NEWTONS;
-                    break;
-                }
-                err = get_load_cell_reading(&app_ctx->sensors[i].sensor.load_cell, &data[i].value);
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to get load cell reading: %s", esp_err_to_name(err));
-                }
-                break;
-            case RESISTANCE_SENSOR:
-                switch (app_ctx->sensors[i].sensor.resistance_sensor.unit) {
-                case RESISTANCE_SENSOR_OHMS:
-                    data[i].unit = QWCP_UNIT_OHMS;
-                    break;
-                }
-                err = get_resistance_reading(&app_ctx->sensors[i].sensor.resistance_sensor, &data[i].value);
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to get resistance reading: %s", esp_err_to_name(err));
-                }
-                break;
-            case CURRENT_SENSOR:
-                switch (app_ctx->sensors[i].sensor.current_sensor.unit) {
-                case CURRENT_SENSOR_A:
-                    data[i].unit = QWCP_UNIT_AMPS;
-                    break;
-                }
-                err = get_current_reading(&app_ctx->sensors[i].sensor.current_sensor, &data[i].value);
-                if (err != ESP_OK) {
-                    ESP_LOGE(TAG, "Failed to get current reading: %s", esp_err_to_name(err));
-                }
-                break;
+            err = s_generic_read_sensor(&app_ctx->sensors[i], &data[i].value, &data[i].unit);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "Failed sensor read for sensor index %u", i);
             }
         }
 
