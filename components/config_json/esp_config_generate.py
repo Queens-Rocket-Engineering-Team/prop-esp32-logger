@@ -31,7 +31,11 @@ num_controls = len(config['controls'])
 sda_pin = mapping['i2c_bus']['sda_pin']
 scl_pin = mapping['i2c_bus']['scl_pin']
 i2c_freq = mapping['i2c_bus']['frequency_Hz']
-wifi_indicator_pin = mapping['wifi_indicator_pin']
+wifi_indicator_pin = mapping.get('wifi_indicator_pin')
+
+wifi_pin_define = ''
+if wifi_indicator_pin is not None:
+    wifi_pin_define = f'#define CONFIG_WIFI_INDICATOR_PIN {wifi_indicator_pin}'
 
 header_content = f"""\
 #pragma once
@@ -60,7 +64,7 @@ extern const char json_config_str[];
 #define CONFIG_SCL_PIN {scl_pin}
 #define CONFIG_I2C_FREQUENCY {i2c_freq}
 
-#define CONFIG_WIFI_INDICATOR_PIN {wifi_indicator_pin}
+{wifi_pin_define}
 
 typedef enum {{
     THERMOCOUPLE,
@@ -220,7 +224,9 @@ def generate_sensor_init(sensor_cfg: dict, sensor_type: str, mapping: dict, inde
     cfg_struct_fields = []
     for struct_field, json_key in template['cfg_struct_fields'].items():
 
-        val = sensor_cfg.get(json_key) or pin_map.get(json_key)
+        val = sensor_cfg.get(json_key)
+        if val is None:
+            val = pin_map.get(json_key)
 
         if struct_field == 'unit':
             val = template['unit'][val.casefold()]

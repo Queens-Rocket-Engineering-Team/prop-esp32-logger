@@ -315,6 +315,52 @@ esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04) {
     return ESP_OK;
 }
 
+esp_err_t ads112c04_set_idac_current(ads112c04_t *ads112c04, idac_current_t current) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (current < IDAC_OFF || current > IDAC_1500_UA) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (current == ads112c04->idac_current) {
+        return ESP_OK;
+    }
+
+    uint8_t reg2;
+    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 2, &reg2), TAG, "Failed to read register");
+    reg2 &= ~IDAC_MASK;
+    reg2 |= current;
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 2, reg2), TAG, "Failed to write to register");
+    
+    ads112c04->idac_current = current;
+    return ESP_OK;
+}
+
+esp_err_t ads112c04_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_routing_t routing) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (routing < IDAC_DISABLED || routing > IDAC_REFN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t reg3;
+    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 3, &reg3), TAG, "Failed to read register");
+
+    if (idac == 1) {
+        reg3 &= ~I1MUX_MASK;
+        reg3 |= routing << 5;
+    } else if (idac == 2) {
+        reg3 &= ~I2MUX_MASK;
+        reg3 |= routing << 2;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 3, reg3), TAG, "Failed to write to register");
+    return ESP_OK;
+}
+
 esp_err_t ads112c04_get_single_voltage_reading(
     ads112c04_t *ads112c04,
     float *voltage,

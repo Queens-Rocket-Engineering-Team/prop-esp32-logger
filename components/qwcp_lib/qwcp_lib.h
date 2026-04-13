@@ -235,7 +235,7 @@ qwcp_lib_ret qwcp_encode_stream_start(uint8_t buffer[], size_t *buffer_len, cons
 qwcp_lib_ret qwcp_encode_control(uint8_t buffer[], size_t *buffer_len, const qwcp_control_packet *control);
 
 // Status, data, and config packet structs include pointers to a variable length array.
-// When these functions are called, the data at that address must still be intact
+// When these functions are called, the data at that address must still be intact.
 
 qwcp_lib_ret qwcp_encode_status(uint8_t buffer[], size_t *buffer_len, const qwcp_status_packet *status);
 

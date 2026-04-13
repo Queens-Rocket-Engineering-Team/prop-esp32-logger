@@ -12,10 +12,10 @@
 #include "setup.h"
 #include "wifi_tools.h"
 
-static const char *TAG = "MAIN";
-
 #define WATCHDOG_RESET_TIMEOUT_MIN 5
 #define WATCHDOG_RESET_TIMEOUT_US (WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1000000)
+
+static const char *TAG = "MAIN";
 
 void app_main(void) {
 
@@ -105,7 +105,7 @@ void app_main(void) {
             } break;
 
             case QWCP_PT_CONTROL: {
-                uint8_t i = payload_in.payload_data.control.command_id;
+                const uint8_t i = payload_in.payload_data.control.command_id;
                 esp_err_t err = ESP_FAIL;
                 qwcp_err_code nack_error_code = QWCP_ERR_HARDWARE_FAULT;
 

@@ -130,6 +130,8 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
     );
     configASSERT(network_ctx->udp_send_handle);
 
+#ifdef CONFIG_WIFI_INDICATOR_PIN
+
     ESP_RETURN_ON_ERROR(gpio_reset_pin(CONFIG_WIFI_INDICATOR_PIN), TAG, "Failed to reset wifi indicator GPIO");
 
     // set up wifi indicator led
@@ -142,6 +144,8 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
     };
     ESP_RETURN_ON_ERROR(gpio_config(&io_conf), TAG, "GPIO config for wifi indicator failed");
     gpio_set_level(CONFIG_WIFI_INDICATOR_PIN, 0);
+
+#endif
 
     return ESP_OK;
 }
@@ -222,12 +226,20 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         switch (event_id) {
         case WIFI_EVENT_STA_START:
             esp_wifi_connect();
+
+#ifdef CONFIG_WIFI_INDICATOR_PIN
             gpio_set_level(CONFIG_WIFI_INDICATOR_PIN, 0);
+#endif
+
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TAG, "Disconnected from AP");
             xTaskNotify(*network_manager_task_handle, SIG_WIFI_DISCONN, eSetBits);
+
+#ifdef CONFIG_WIFI_INDICATOR_PIN
             gpio_set_level(CONFIG_WIFI_INDICATOR_PIN, 0);
+#endif
+
             esp_wifi_connect(); // TODO add retry counter
             break;
         case WIFI_EVENT_STA_CONNECTED:
@@ -242,14 +254,22 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             if (network_manager_task_handle != NULL) {
                 xTaskNotify(*network_manager_task_handle, SIG_WIFI_CONN, eSetBits);
             }
+
+#ifdef CONFIG_WIFI_INDICATOR_PIN
             gpio_set_level(CONFIG_WIFI_INDICATOR_PIN, 1);
+#endif
+
             break;
         case IP_EVENT_STA_LOST_IP:
             ESP_LOGI(TAG, "Lost IP");
             if (network_manager_task_handle != NULL) {
                 xTaskNotify(*network_manager_task_handle, SIG_WIFI_DISCONN, eSetBits);
             }
+
+#ifdef CONFIG_WIFI_INDICATOR_PIN
             gpio_set_level(CONFIG_WIFI_INDICATOR_PIN, 0);
+#endif
+
             break;
         }
     }

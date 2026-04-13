@@ -6,12 +6,35 @@
 #include <stdint.h>
 
 typedef enum {
-    ADS112C04_PIN0 = 0,
-    ADS112C04_PIN1 = 1,
-    ADS112C04_PIN2 = 2,
-    ADS112C04_PIN3 = 3,
-    ADS112C04_AVSS = 4
+    ADS112C04_AIN0 = 0,
+    ADS112C04_AIN1 = 1,
+    ADS112C04_AIN2 = 2,
+    ADS112C04_AIN3 = 3,
+    ADS112C04_AVSS = 4,
 } ads112c04_pin_t;
+
+typedef enum {
+    IDAC_OFF = 0x00,
+    IDAC_10_UA = 0x01,
+    IDAC_50_UA = 0x02,
+    IDAC_100_UA = 0x03,
+    IDAC_250_UA = 0x04,
+    IDAC_500_UA = 0x05,
+    IDAC_1000_UA = 0x06,
+    IDAC_1500_UA = 0x07,
+    IDAC_INVALID_CURRENT = 0xFF,
+} idac_current_t;
+
+typedef enum {
+    IDAC_DISABLED = 0x00,
+    IDAC_AIN0 = 0x01,
+    IDAC_AIN1 = 0x02,
+    IDAC_AIN2 = 0x03,
+    IDAC_AIN3 = 0x04,
+    IDAC_REFP = 0x05,
+    IDAC_REFN = 0x06,
+    IDAC_INVALID_ROUTING = 0xFF,
+} idac_routing_t;
 
 typedef enum {
     CM_SINGLE_SHOT,
@@ -24,6 +47,7 @@ typedef struct {
     i2c_master_dev_handle_t dev_handle;
     float ref_voltage;
     conversion_mode_t conversion_mode;
+    idac_current_t idac_current;
     uint8_t addr;
     uint8_t gain;
     bool pga_enabled;
@@ -49,6 +73,9 @@ esp_err_t ads112c04_set_inputs(
     uint8_t gain,
     bool pga_enabled
 );
+
+esp_err_t ads112c04_set_idac_current(ads112c04_t *ads112c04, idac_current_t current);
+esp_err_t ads112c04_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_routing_t routing);
 
 esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04);
 
