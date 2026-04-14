@@ -89,6 +89,9 @@ void udp_client_send(void *pvParams) {
         }
 
         int32_t len_sent = send(network_ctx->server_udp_sock, tx_buffer, packet_len, 0);
+        // give semaphore to allow data to be modified after sent
+        xSemaphoreGive(network_ctx->udp_send_semaphore_handle);
+
         if (len_sent < 0) {
             ESP_LOGE(TAG, "send failed: errno %d", errno);
             continue;

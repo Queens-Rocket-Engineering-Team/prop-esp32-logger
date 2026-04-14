@@ -7,8 +7,8 @@
 #include <netdb.h>
 #include <sys/socket.h>
 
-#include "qwcp_lib.h"
 #include "config_json.h"
+#include "qwcp_lib.h"
 #include "wifi_tools.h"
 
 #define TCP_SERVER_PORT 50000
@@ -66,8 +66,12 @@ esp_err_t network_manager_init(network_ctx_t *network_ctx) {
     );
     configASSERT(network_ctx->udp_send_queue_handle);
 
-    // set up event group for wifi connection status
+    // set up binary semaphore for sensor data
+    static StaticSemaphore_t xStaticSemaphoreBuffer_UDPSEND;
+    network_ctx->udp_send_semaphore_handle = xSemaphoreCreateBinaryStatic(&xStaticSemaphoreBuffer_UDPSEND);
+    configASSERT(network_ctx->udp_send_semaphore_handle);
 
+    // set up event group for wifi connection status
     static StaticEventGroup_t xEventGroup_WIFI;
 
     network_ctx->wifi_event_group_handle = xEventGroupCreateStatic(&xEventGroup_WIFI);

@@ -131,6 +131,8 @@ void sensor_stream(void *pvParams) {
                 xLastWakeTime = xTaskGetTickCount(); // update timestamp to avoid double sending packets on change
             }
         }
+        // binary semaphore to prevent weiting to data before sending
+        xSemaphoreTake(app_ctx->network_ctx->udp_send_semaphore_handle, pdMS_TO_TICKS(50));
 
         static qwcp_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 

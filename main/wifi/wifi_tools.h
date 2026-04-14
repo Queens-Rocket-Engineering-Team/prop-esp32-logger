@@ -31,6 +31,7 @@ typedef struct {
     QueueHandle_t tcp_recv_queue_handle;
     QueueHandle_t tcp_send_queue_handle;
     QueueHandle_t udp_send_queue_handle;
+    SemaphoreHandle_t udp_send_semaphore_handle;
     EventGroupHandle_t wifi_event_group_handle;
     TaskHandle_t network_manager_handle;
     TaskHandle_t tcp_recv_handle;
