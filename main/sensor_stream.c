@@ -13,7 +13,7 @@
 #include "thermocouple.h"
 
 #include "config_json.h"
-#include "qwcp_lib.h"
+#include "qlcp_lib.h"
 #include "sensor_stream.h"
 #include "setup.h"
 
@@ -30,13 +30,13 @@ static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *v
     case THERMOCOUPLE:
         switch (generic_sensor->sensor.thermocouple.unit) {
         case THERMOCOUPLE_C:
-            *unit = QWCP_UNIT_CELSIUS;
+            *unit = QLCP_UNIT_CELSIUS;
             break;
         case THERMOCOUPLE_K:
-            *unit = QWCP_UNIT_KELVIN;
+            *unit = QLCP_UNIT_KELVIN;
             break;
         case THERMOCOUPLE_F:
-            *unit = QWCP_UNIT_FAHRENHEIT;
+            *unit = QLCP_UNIT_FAHRENHEIT;
             break;
         }
         ESP_RETURN_ON_ERROR(
@@ -48,13 +48,13 @@ static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *v
     case PRESSURE_TRANSDUCER:
         switch (generic_sensor->sensor.pressure_transducer.unit) {
         case PRESSURE_TRANSDUCER_PSI:
-            *unit = QWCP_UNIT_PSI;
+            *unit = QLCP_UNIT_PSI;
             break;
         case PRESSURE_TRANSDUCER_BAR:
-            *unit = QWCP_UNIT_BAR;
+            *unit = QLCP_UNIT_BAR;
             break;
         case PRESSURE_TRANSDUCER_PA:
-            *unit = QWCP_UNIT_PASCAL;
+            *unit = QLCP_UNIT_PASCAL;
             break;
         }
         ESP_RETURN_ON_ERROR(
@@ -66,10 +66,10 @@ static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *v
     case LOAD_CELL:
         switch (generic_sensor->sensor.load_cell.unit) {
         case LOAD_CELL_KG:
-            *unit = QWCP_UNIT_KILOGRAMS;
+            *unit = QLCP_UNIT_KILOGRAMS;
             break;
         case LOAD_CELL_N:
-            *unit = QWCP_UNIT_NEWTONS;
+            *unit = QLCP_UNIT_NEWTONS;
             break;
         }
         ESP_RETURN_ON_ERROR(
@@ -79,7 +79,7 @@ static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *v
     case RESISTANCE_SENSOR:
         switch (generic_sensor->sensor.resistance_sensor.unit) {
         case RESISTANCE_SENSOR_OHMS:
-            *unit = QWCP_UNIT_OHMS;
+            *unit = QLCP_UNIT_OHMS;
             break;
         }
         ESP_RETURN_ON_ERROR(
@@ -91,7 +91,7 @@ static esp_err_t s_generic_read_sensor(config_sensor_t *generic_sensor, float *v
     case CURRENT_SENSOR:
         switch (generic_sensor->sensor.current_sensor.unit) {
         case CURRENT_SENSOR_A:
-            *unit = QWCP_UNIT_AMPS;
+            *unit = QLCP_UNIT_AMPS;
             break;
         }
         ESP_RETURN_ON_ERROR(
@@ -132,7 +132,7 @@ void sensor_stream(void *pvParams) {
             }
         }
 
-        static qwcp_sensor_data data[CONFIG_NUM_SENSORS] = {0};
+        static qlcp_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 
         for (size_t i = 0; i < CONFIG_NUM_SENSORS; i++) {
             data[i].sensor_id = i;
@@ -146,7 +146,7 @@ void sensor_stream(void *pvParams) {
         const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
         const uint16_t sequence = atomic_fetch_add(&app_ctx->sequence, 1);
 
-        qwcp_data_packet data_packet = {
+        qlcp_data_packet data_packet = {
             .sensor_data = data,
             .sensor_count = CONFIG_NUM_SENSORS,
             .header = {

@@ -1,14 +1,14 @@
 # Project name here (undecided)
-This project includes the ESP-IDF firmware for Launch Control's controller nodes. These nodes function as the interface between remote commands and the launch hardware.
+This repository contains the ESP32 firmware for Launch Control's control nodes. These nodes function as the interface between remote commands and the launch hardware.
 
-Controller nodes not autonomous, and require commands from the external control server to operate. Controller nodes can aqcuire sensor readings and actuate controls remotely. The firmware uses two JSON configuration files to generate code for different board configurations during the build process, allowing different sensor and control configurations to be implemented for various board configurations.
+Control nodes are not autonomous, and require commands from the external control server to operate. Control nodes can aqcuire sensor readings and actuate controls remotely. The firmware uses two JSON configuration files to generate initialization code for different board configurations during the build process, allowing sensor and control configurations to be implemented for different hardware setups.
 
 ```mermaid
 ---
 title: Launch Control System Architecture
 ---
 flowchart LR
-    CN(Controller Nodes) <--> CS[Control Server]
+    CN(Control Nodes) <--> CS[Control Server]
     style CN fill:#a11
 
     CAM(Cameras) <--> CS

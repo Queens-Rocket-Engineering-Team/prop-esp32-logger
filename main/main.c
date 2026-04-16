@@ -7,7 +7,7 @@
 
 #include "config_json.h"
 #include "control.h"
-#include "qwcp_lib.h"
+#include "qlcp_lib.h"
 #include "sensor_stream.h"
 #include "setup.h"
 #include "wifi_tools.h"
@@ -27,8 +27,8 @@ void app_main(void) {
     // reset watchdog timer
     uint64_t last_packet_time_us = esp_timer_get_time();
     // processing for incoming/outgoing packets
-    qwcp_client_payload payload_in = {0};
-    qwcp_server_payload payload_out = {0};
+    qlcp_client_payload payload_in = {0};
+    qlcp_server_payload payload_out = {0};
 
     while (1) {
 
@@ -43,11 +43,11 @@ void app_main(void) {
         // send config on connection
         if (!app_ctx.network_ctx->config_sent && (wifi_bits & SERVER_CONNECTED_BIT)) {
             last_packet_time_us = esp_timer_get_time();
-            payload_out.packet_type = QWCP_PT_CONFIG;
+            payload_out.packet_type = QLCP_PT_CONFIG;
 
             const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-            const qwcp_config_packet config = {
+            const qlcp_config_packet config = {
                 .config_data = json_config_str,
                 .config_data_len = JSON_CONFIG_LEN,
                 .header = {
@@ -76,7 +76,7 @@ void app_main(void) {
             last_packet_time_us = esp_timer_get_time();
 
             switch (payload_in.packet_type) {
-            case QWCP_PT_ESTOP:
+            case QLCP_PT_ESTOP:
                 for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                     control_set_default(&app_ctx.controls[i]);
                 }
@@ -84,18 +84,18 @@ void app_main(void) {
                 ESP_LOGW(TAG, "Received ESTOP, reset to default state");
                 continue;
 
-            case QWCP_PT_TIMESYNC: {
+            case QLCP_PT_TIMESYNC: {
                 const uint32_t new_ts_offset = payload_in.payload_data.header_only.timestamp -
                                                (uint32_t)(esp_timer_get_time() / 1000);
                 atomic_store(&app_ctx.ts_offset, new_ts_offset);
-                payload_out.packet_type = QWCP_PT_ACK;
+                payload_out.packet_type = QLCP_PT_ACK;
 
                 const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                 const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                const qwcp_ack_packet ack = {
-                    .ack_packet_type = QWCP_PT_TIMESYNC,
+                const qlcp_ack_packet ack = {
+                    .ack_packet_type = QLCP_PT_TIMESYNC,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
                     .header = {
                                .sequence = sequence,
@@ -105,31 +105,31 @@ void app_main(void) {
                 payload_out.payload_data.ack = ack;
             } break;
 
-            case QWCP_PT_CONTROL: {
+            case QLCP_PT_CONTROL: {
                 const uint8_t i = payload_in.payload_data.control.command_id;
                 esp_err_t err = ESP_FAIL;
-                qwcp_err_code nack_error_code = QWCP_ERR_HARDWARE_FAULT;
+                qlcp_err_code nack_error_code = QLCP_ERR_HARDWARE_FAULT;
 
                 if (i < CONFIG_NUM_CONTROLS) {
-                    if (payload_in.payload_data.control.command_state == QWCP_CS_OPEN) {
+                    if (payload_in.payload_data.control.command_state == QLCP_CS_OPEN) {
                         err = control_open(&app_ctx.controls[i]);
-                    } else if (payload_in.payload_data.control.command_state == QWCP_CS_CLOSED) {
+                    } else if (payload_in.payload_data.control.command_state == QLCP_CS_CLOSED) {
                         err = control_close(&app_ctx.controls[i]);
                     }
                 } else {
-                    nack_error_code = QWCP_ERR_INVALID_PARAM;
+                    nack_error_code = QLCP_ERR_INVALID_PARAM;
                 }
 
                 ESP_ERROR_CHECK_WITHOUT_ABORT(err);
                 if (err == ESP_OK) {
-                    payload_out.packet_type = QWCP_PT_ACK;
+                    payload_out.packet_type = QLCP_PT_ACK;
 
                     const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                     const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                     const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                    const qwcp_ack_packet ack = {
-                        .ack_packet_type = QWCP_PT_CONTROL,
+                    const qlcp_ack_packet ack = {
+                        .ack_packet_type = QLCP_PT_CONTROL,
                         .ack_sequence = payload_in.payload_data.header_only.sequence,
                         .header = {
                                    .sequence = sequence,
@@ -138,14 +138,14 @@ void app_main(void) {
                     };
                     payload_out.payload_data.ack = ack;
                 } else {
-                    payload_out.packet_type = QWCP_PT_NACK;
+                    payload_out.packet_type = QLCP_PT_NACK;
 
                     const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                     const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                     const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                    const qwcp_nack_packet nack = {
-                        .nack_packet_type = QWCP_PT_CONTROL,
+                    const qlcp_nack_packet nack = {
+                        .nack_packet_type = QLCP_PT_CONTROL,
                         .nack_sequence = payload_in.payload_data.header_only.sequence,
                         .nack_error_code = nack_error_code,
                         .header = {
@@ -157,34 +157,34 @@ void app_main(void) {
                 }
             } break;
 
-            case QWCP_PT_STATUS_REQUEST: {
-                static qwcp_control_data control_data[CONFIG_NUM_CONTROLS] = {0};
+            case QLCP_PT_STATUS_REQUEST: {
+                static qlcp_control_data control_data[CONFIG_NUM_CONTROLS] = {0};
 
                 for (size_t i = 0; i < CONFIG_NUM_CONTROLS; i++) {
                     control_data[i].control_id = i;
                     const control_state_t control_internal_state = control_get_state(&app_ctx.controls[i]);
                     switch (control_internal_state) {
                     case CONTROL_OPEN:
-                        control_data[i].control_state = QWCP_CS_OPEN;
+                        control_data[i].control_state = QLCP_CS_OPEN;
                         break;
                     case CONTROL_CLOSED:
-                        control_data[i].control_state = QWCP_CS_CLOSED;
+                        control_data[i].control_state = QLCP_CS_CLOSED;
                         break;
                     case CONTROL_UNKNOWN:
-                        control_data[i].control_state = QWCP_CS_ERROR;
+                        control_data[i].control_state = QLCP_CS_ERROR;
                     };
                 }
 
-                payload_out.packet_type = QWCP_PT_STATUS;
+                payload_out.packet_type = QLCP_PT_STATUS;
 
                 const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                 const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                const qwcp_status_packet status = {
+                const qlcp_status_packet status = {
                     .control_data = control_data,
                     .control_count = CONFIG_NUM_CONTROLS,
-                    .device_status = QWCP_DS_ACTIVE,
+                    .device_status = QLCP_DS_ACTIVE,
                     .header = {
                                .sequence = sequence,
                                .timestamp = timestamp,
@@ -193,7 +193,7 @@ void app_main(void) {
                 payload_out.payload_data.status = status;
             } break;
 
-            case QWCP_PT_STREAM_START: {
+            case QLCP_PT_STREAM_START: {
                 // give the stream task the frequency
                 xTaskNotify(
                     app_ctx.sensor_stream_handle,
@@ -203,14 +203,14 @@ void app_main(void) {
                 // notify the stream task to start
                 xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
                 ESP_LOGI(TAG, "Sensor stream started");
-                payload_out.packet_type = QWCP_PT_ACK;
+                payload_out.packet_type = QLCP_PT_ACK;
 
                 const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                 const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                const qwcp_ack_packet ack = {
-                    .ack_packet_type = QWCP_PT_STREAM_START,
+                const qlcp_ack_packet ack = {
+                    .ack_packet_type = QLCP_PT_STREAM_START,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
                     .header = {
                                .sequence = sequence,
@@ -220,17 +220,17 @@ void app_main(void) {
                 payload_out.payload_data.ack = ack;
             } break;
 
-            case QWCP_PT_STREAM_STOP: {
+            case QLCP_PT_STREAM_STOP: {
                 xEventGroupClearBits(app_ctx.sensor_stream_event_group_handle, SENSOR_STREAM_ENABLE_BIT);
                 ESP_LOGI(TAG, "Sensor stream stopped");
-                payload_out.packet_type = QWCP_PT_ACK;
+                payload_out.packet_type = QLCP_PT_ACK;
 
                 const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                 const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                const qwcp_ack_packet ack = {
-                    .ack_packet_type = QWCP_PT_STREAM_STOP,
+                const qlcp_ack_packet ack = {
+                    .ack_packet_type = QLCP_PT_STREAM_STOP,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
                     .header = {
                                .sequence = sequence,
@@ -240,22 +240,22 @@ void app_main(void) {
                 payload_out.payload_data.ack = ack;
             } break;
 
-            case QWCP_PT_GET_SINGLE: {
+            case QLCP_PT_GET_SINGLE: {
                 // notify the stream task to send single reading
                 xEventGroupSetBits(app_ctx.sensor_stream_event_group_handle, SENSORS_SINGLE_READING_BIT);
                 ESP_LOGI(TAG, "Sensors single reading");
             }
                 continue;
 
-            case QWCP_PT_HEARTBEAT: {
-                payload_out.packet_type = QWCP_PT_ACK;
+            case QLCP_PT_HEARTBEAT: {
+                payload_out.packet_type = QLCP_PT_ACK;
 
                 const uint32_t current_ts_offset = atomic_load(&app_ctx.ts_offset);
                 const uint32_t timestamp = current_ts_offset + (uint32_t)(esp_timer_get_time() / 1000);
                 const uint16_t sequence = atomic_fetch_add(&app_ctx.sequence, 1);
 
-                const qwcp_ack_packet ack = {
-                    .ack_packet_type = QWCP_PT_HEARTBEAT,
+                const qlcp_ack_packet ack = {
+                    .ack_packet_type = QLCP_PT_HEARTBEAT,
                     .ack_sequence = payload_in.payload_data.header_only.sequence,
                     .header = {
                                .sequence = sequence,
@@ -265,8 +265,8 @@ void app_main(void) {
                 payload_out.payload_data.ack = ack;
             } break;
 
-            case QWCP_PT_ACK:
-            case QWCP_PT_NACK:
+            case QLCP_PT_ACK:
+            case QLCP_PT_NACK:
                 continue;
 
             default:

@@ -1,4 +1,4 @@
 idf_component_register(
-    SRCS "qwcp_lib.c"
+    SRCS "qlcp_lib.c"
     INCLUDE_DIRS .
 )
