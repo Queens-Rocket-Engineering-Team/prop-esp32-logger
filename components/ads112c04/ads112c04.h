@@ -42,8 +42,10 @@ typedef enum : uint8_t {
 } conversion_mode_t;
 
 typedef struct {
-    StaticSemaphore_t xSemaphoreBufferDRDY;
-    SemaphoreHandle_t xSemaphoreDRDY;
+    StaticSemaphore_t mutex_buffer;
+    SemaphoreHandle_t mutex;
+    StaticSemaphore_t semaphore_buffer_DRDY;
+    SemaphoreHandle_t semaphore_DRDY;
     i2c_master_dev_handle_t dev_handle;
     float ref_voltage;
     conversion_mode_t conversion_mode;
@@ -74,10 +76,10 @@ esp_err_t ads112c04_set_inputs(
     bool pga_enabled
 );
 
+esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04);
+
 esp_err_t ads112c04_set_idac_current(ads112c04_t *ads112c04, idac_current_t current);
 esp_err_t ads112c04_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_routing_t routing);
-
-esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04);
 
 esp_err_t ads112c04_get_single_voltage_reading(
     ads112c04_t *ads112c04,

@@ -154,6 +154,121 @@ static uint8_t s_get_mux_code(ads112c04_pin_t p_pin, ads112c04_pin_t n_pin) {
     return lut[p_pin][n_pin];
 }
 
+static esp_err_t s_set_inputs(
+    ads112c04_t *ads112c04,
+    ads112c04_pin_t p_pin,
+    ads112c04_pin_t n_pin,
+    uint8_t gain,
+    bool pga_enabled
+) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (n_pin == ADS112C04_AVSS && pga_enabled) {
+        ESP_LOGE(TAG, "Cannot enable PGA for single-ended readings");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    // check if given gain is valid for configuration
+    uint8_t gain_bits = s_get_gain_bits(gain);
+    if (gain_bits == INVALID_GAIN) {
+        ESP_LOGE(TAG, "%d gain is not a valid gain", gain);
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!pga_enabled) {
+        if (gain_bits > 2) {
+            ESP_LOGE(TAG, "%d gain is not a valid gain with PGA disabled", gain);
+            return ESP_ERR_INVALID_ARG;
+        }
+    }
+
+    // get the mux code bits from pins
+    uint8_t mux_code = s_get_mux_code(p_pin, n_pin);
+    if (mux_code == INVALID_MUX) {
+        ESP_LOGE(TAG, "Given pin pair is not a valid mux config");
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t pga_bypass_bit = !pga_enabled;
+
+    uint8_t reg0 = 0;
+    reg0 |= (mux_code << 4) & MUX_MASK;
+    reg0 |= (gain_bits << 1) & GAIN_MASK;
+    reg0 |= pga_bypass_bit & PGA_BYPASS_MASK;
+
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 0, reg0), TAG, "Failed to write reg0");
+
+    ads112c04->gain = gain;
+    ads112c04->pga_enabled = pga_enabled;
+
+    return ESP_OK;
+}
+
+static esp_err_t s_set_single_shot(ads112c04_t *ads112c04) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (ads112c04->conversion_mode != CM_SINGLE_SHOT) {
+        uint8_t reg1;
+        ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 1, &reg1), TAG, "Failed to read register");
+        reg1 &= ~CM_MASK;
+        ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 1, reg1), TAG, "Failed to write to register");
+        ads112c04->conversion_mode = CM_SINGLE_SHOT;
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t s_set_idac_current(ads112c04_t *ads112c04, idac_current_t current) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (current > IDAC_1500_UA) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (current == ads112c04->idac_current) {
+        return ESP_OK;
+    }
+
+    uint8_t reg2;
+    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 2, &reg2), TAG, "Failed to read register");
+    reg2 &= ~IDAC_MASK;
+    reg2 |= current;
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 2, reg2), TAG, "Failed to write to register");
+    
+    ads112c04->idac_current = current;
+
+    return ESP_OK;
+}
+
+static esp_err_t s_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_routing_t routing) {
+    if (ads112c04 == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (routing > IDAC_REFN) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    uint8_t reg3;
+    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 3, &reg3), TAG, "Failed to read register");
+
+    if (idac == 1) {
+        reg3 &= ~I1MUX_MASK;
+        reg3 |= routing << 5;
+    } else if (idac == 2) {
+        reg3 &= ~I2MUX_MASK;
+        reg3 |= routing << 2;
+    } else {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 3, reg3), TAG, "Failed to write to register");
+
+    return ESP_OK;
+}
+
 // convert rdata bits to voltage
 static float s_bits_to_voltage(ads112c04_t *ads112c04, int16_t raw_data) {
     float voltage = (raw_data * ads112c04->ref_voltage) / (32768.0f * ads112c04->gain); // 16 bit ADC
@@ -173,7 +288,7 @@ static void IRAM_ATTR drdy_isr_handler(void *arg) {
 
     BaseType_t higher_priority_task_woken = pdFALSE;
     // indicate conversion is ready
-    xSemaphoreGiveFromISR(ads112c04->xSemaphoreDRDY, &higher_priority_task_woken);
+    xSemaphoreGiveFromISR(ads112c04->semaphore_DRDY, &higher_priority_task_woken);
 
     if (higher_priority_task_woken) {
         portYIELD_FROM_ISR();
@@ -190,9 +305,13 @@ esp_err_t ads112c04_init(ads112c04_t *ads112c04, const ads112c04_config_t *ads11
         s_init_i2c(ads112c04, ads112c04_cfg->bus_handle, ads112c04_cfg->bus_frequency), TAG, "I2C init failed"
     );
 
+    // initialize mutex
+    ads112c04->mutex = xSemaphoreCreateMutexStatic(&ads112c04->mutex_buffer);
+    configASSERT(ads112c04->mutex);
+
     // initialize conversion binary semaphore
-    ads112c04->xSemaphoreDRDY = xSemaphoreCreateBinaryStatic(&ads112c04->xSemaphoreBufferDRDY);
-    configASSERT(ads112c04->xSemaphoreDRDY);
+    ads112c04->semaphore_DRDY = xSemaphoreCreateBinaryStatic(&ads112c04->semaphore_buffer_DRDY);
+    configASSERT(ads112c04->semaphore_DRDY);
 
     ESP_RETURN_ON_ERROR(gpio_reset_pin(ads112c04_cfg->drdy_pin), TAG, "Failed to reset GPIO for DRDY");
 
@@ -261,43 +380,13 @@ esp_err_t ads112c04_set_inputs(
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (n_pin == ADS112C04_AVSS && pga_enabled) {
-        ESP_LOGE(TAG, "Cannot enable PGA for single-ended readings");
-        return ESP_ERR_INVALID_ARG;
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
     }
+    esp_err_t ret = s_set_inputs(ads112c04, p_pin, n_pin, gain, pga_enabled);
 
-    // check if given gain is valid for configuration
-    uint8_t gain_bits = s_get_gain_bits(gain);
-    if (gain_bits == INVALID_GAIN) {
-        ESP_LOGE(TAG, "%d gain is not a valid gain", gain);
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (!pga_enabled) {
-        if (gain_bits > 2) {
-            ESP_LOGE(TAG, "%d gain is not a valid gain with PGA disabled", gain);
-            return ESP_ERR_INVALID_ARG;
-        }
-    }
-
-    // get the mux code bits from pins
-    uint8_t mux_code = s_get_mux_code(p_pin, n_pin);
-    if (mux_code == INVALID_MUX) {
-        ESP_LOGE(TAG, "Given pin pair is not a valid mux config");
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    uint8_t pga_bypass_bit = !pga_enabled;
-
-    uint8_t reg0 = 0;
-    reg0 |= (mux_code << 4) & MUX_MASK;
-    reg0 |= (gain_bits << 1) & GAIN_MASK;
-    reg0 |= pga_bypass_bit & PGA_BYPASS_MASK;
-
-    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 0, reg0), TAG, "Failed to write reg0");
-
-    ads112c04->gain = gain;
-    ads112c04->pga_enabled = pga_enabled;
-    return ESP_OK;
+    xSemaphoreGive(ads112c04->mutex);
+    return ret;
 }
 
 esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04) {
@@ -305,60 +394,41 @@ esp_err_t ads112c04_set_single_shot(ads112c04_t *ads112c04) {
         return ESP_ERR_INVALID_ARG;
     }
 
-    if (ads112c04->conversion_mode != CM_SINGLE_SHOT) {
-        uint8_t reg1;
-        ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 1, &reg1), TAG, "Failed to read register");
-        reg1 &= ~CM_MASK;
-        ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 1, reg1), TAG, "Failed to write to register");
-        ads112c04->conversion_mode = CM_SINGLE_SHOT;
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
     }
-    return ESP_OK;
+    esp_err_t ret = s_set_single_shot(ads112c04);
+
+    xSemaphoreGive(ads112c04->mutex);
+    return ret;
 }
 
 esp_err_t ads112c04_set_idac_current(ads112c04_t *ads112c04, idac_current_t current) {
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (current > IDAC_1500_UA) {
-        return ESP_ERR_INVALID_ARG;
-    }
-    if (current == ads112c04->idac_current) {
-        return ESP_OK;
-    }
 
-    uint8_t reg2;
-    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 2, &reg2), TAG, "Failed to read register");
-    reg2 &= ~IDAC_MASK;
-    reg2 |= current;
-    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 2, reg2), TAG, "Failed to write to register");
-    
-    ads112c04->idac_current = current;
-    return ESP_OK;
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
+    }
+    esp_err_t ret = s_set_idac_current(ads112c04, current);
+
+    xSemaphoreGive(ads112c04->mutex);
+    return ret;
 }
 
 esp_err_t ads112c04_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_routing_t routing) {
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (routing > IDAC_REFN) {
-        return ESP_ERR_INVALID_ARG;
+
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
     }
+    esp_err_t ret = s_set_idac_routing(ads112c04, idac, routing);
 
-    uint8_t reg3;
-    ESP_RETURN_ON_ERROR(s_read_register(ads112c04, 3, &reg3), TAG, "Failed to read register");
-
-    if (idac == 1) {
-        reg3 &= ~I1MUX_MASK;
-        reg3 |= routing << 5;
-    } else if (idac == 2) {
-        reg3 &= ~I2MUX_MASK;
-        reg3 |= routing << 2;
-    } else {
-        return ESP_ERR_INVALID_ARG;
-    }
-
-    ESP_RETURN_ON_ERROR(s_write_register(ads112c04, 3, reg3), TAG, "Failed to write to register");
-    return ESP_OK;
+    xSemaphoreGive(ads112c04->mutex);
+    return ret;
 }
 
 esp_err_t ads112c04_get_single_voltage_reading(
@@ -379,14 +449,18 @@ esp_err_t ads112c04_get_single_voltage_reading(
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore without waiting
-    ESP_RETURN_ON_ERROR(ads112c04_set_single_shot(ads112c04), TAG, "Set single shot failed");
-    ESP_RETURN_ON_ERROR(ads112c04_set_inputs(ads112c04, p_pin, n_pin, gain, pga_enabled), TAG, "Set inputs failed");
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    xSemaphoreTake(ads112c04->semaphore_DRDY, 0); // clear semaphore without waiting
+    ESP_RETURN_ON_ERROR(s_set_single_shot(ads112c04), TAG, "Set single shot failed");
+    ESP_RETURN_ON_ERROR(s_set_inputs(ads112c04, p_pin, n_pin, gain, pga_enabled), TAG, "Set inputs failed");
 
     ESP_RETURN_ON_ERROR(s_send_command(ads112c04, START_SYNC), TAG, "START/SYNC command failed");
 
     // wait until DRDY pin pulls low
-    if (xSemaphoreTake(ads112c04->xSemaphoreDRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
+    if (xSemaphoreTake(ads112c04->semaphore_DRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
         return ESP_ERR_TIMEOUT;
     }
 
@@ -394,6 +468,9 @@ esp_err_t ads112c04_get_single_voltage_reading(
     ESP_RETURN_ON_ERROR(s_read_data(ads112c04, &raw_data), TAG, "Failed to read conversion data");
 
     *voltage = s_bits_to_voltage(ads112c04, raw_data);
+
+    xSemaphoreGive(ads112c04->mutex);
+
     return ESP_OK;
 }
 
@@ -402,14 +479,18 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
         return ESP_ERR_INVALID_ARG;
     }
 
-    xSemaphoreTake(ads112c04->xSemaphoreDRDY, 0); // clear semaphore without waiting
-    ESP_RETURN_ON_ERROR(ads112c04_set_single_shot(ads112c04), TAG, "Set single shot failed");
+    if (xSemaphoreTake(ads112c04->mutex, pdMS_TO_TICKS(100)) == pdFALSE) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    xSemaphoreTake(ads112c04->semaphore_DRDY, 0); // clear semaphore without waiting
+    ESP_RETURN_ON_ERROR(s_set_single_shot(ads112c04), TAG, "Set single shot failed");
     ESP_RETURN_ON_ERROR(s_enable_internal_temperature(ads112c04), TAG, "Failed to enable internal temperature sensor");
 
     ESP_RETURN_ON_ERROR(s_send_command(ads112c04, START_SYNC), TAG, "START/SYNC command failed");
 
     // wait until DRDY pin pulls low
-    if (xSemaphoreTake(ads112c04->xSemaphoreDRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
+    if (xSemaphoreTake(ads112c04->semaphore_DRDY, pdTICKS_TO_MS(100)) == pdFALSE) {
         return ESP_ERR_TIMEOUT;
     }
 
@@ -420,5 +501,8 @@ esp_err_t ads112c04_get_single_temperature_reading(ads112c04_t *ads112c04, float
     );
 
     *temperature = s_bits_to_temperature(raw_data);
+
+    xSemaphoreGive(ads112c04->mutex);
+
     return ESP_OK;
 }
