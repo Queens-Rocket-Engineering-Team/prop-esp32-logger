@@ -5,7 +5,7 @@
 #include <freertos/FreeRTOS.h>
 #include <stdint.h>
 
-typedef enum {
+typedef enum : uint8_t {
     ADS112C04_AIN0 = 0,
     ADS112C04_AIN1 = 1,
     ADS112C04_AIN2 = 2,
@@ -13,7 +13,7 @@ typedef enum {
     ADS112C04_AVSS = 4,
 } ads112c04_pin_t;
 
-typedef enum {
+typedef enum : uint8_t {
     IDAC_OFF = 0x00,
     IDAC_10_UA = 0x01,
     IDAC_50_UA = 0x02,
@@ -25,7 +25,7 @@ typedef enum {
     IDAC_INVALID_CURRENT = 0xFF,
 } idac_current_t;
 
-typedef enum {
+typedef enum : uint8_t {
     IDAC_DISABLED = 0x00,
     IDAC_AIN0 = 0x01,
     IDAC_AIN1 = 0x02,
@@ -36,7 +36,7 @@ typedef enum {
     IDAC_INVALID_ROUTING = 0xFF,
 } idac_routing_t;
 
-typedef enum {
+typedef enum : uint8_t {
     CM_SINGLE_SHOT,
     CM_CONTINUOUS
 } conversion_mode_t;

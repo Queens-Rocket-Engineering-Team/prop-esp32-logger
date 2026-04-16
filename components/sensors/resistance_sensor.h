@@ -6,7 +6,7 @@
 
 #include "sensor.h"
 
-typedef enum {
+typedef enum : uint8_t {
     RESISTANCE_SENSOR_OHMS,
 } resistance_sensor_unit_t;
 

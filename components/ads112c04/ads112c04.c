@@ -319,7 +319,7 @@ esp_err_t ads112c04_set_idac_current(ads112c04_t *ads112c04, idac_current_t curr
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (current < IDAC_OFF || current > IDAC_1500_UA) {
+    if (current > IDAC_1500_UA) {
         return ESP_ERR_INVALID_ARG;
     }
     if (current == ads112c04->idac_current) {
@@ -340,7 +340,7 @@ esp_err_t ads112c04_set_idac_routing(ads112c04_t *ads112c04, uint8_t idac, idac_
     if (ads112c04 == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (routing < IDAC_DISABLED || routing > IDAC_REFN) {
+    if (routing > IDAC_REFN) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -372,10 +372,10 @@ esp_err_t ads112c04_get_single_voltage_reading(
     if (ads112c04 == NULL || voltage == NULL) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (p_pin > 4 || p_pin < 0) {
+    if (p_pin > 4) {
         return ESP_ERR_INVALID_ARG;
     }
-    if (n_pin > 4 || n_pin < 0) {
+    if (n_pin > 4) {
         return ESP_ERR_INVALID_ARG;
     }
 

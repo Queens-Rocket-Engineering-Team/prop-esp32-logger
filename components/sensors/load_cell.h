@@ -6,7 +6,7 @@
 
 #include "sensor.h"
 
-typedef enum {
+typedef enum : uint8_t {
     LOAD_CELL_KG,
     LOAD_CELL_N,
 } load_cell_unit_t;

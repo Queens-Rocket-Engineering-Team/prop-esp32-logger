@@ -6,7 +6,7 @@
 
 #include "sensor.h"
 
-typedef enum {
+typedef enum : uint8_t {
     THERMOCOUPLE_C,
     THERMOCOUPLE_K,
     THERMOCOUPLE_F,

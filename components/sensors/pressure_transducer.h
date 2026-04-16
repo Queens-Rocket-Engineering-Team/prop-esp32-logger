@@ -6,7 +6,7 @@
 
 #include "sensor.h"
 
-typedef enum {
+typedef enum : uint8_t {
     PRESSURE_TRANSDUCER_PSI,
     PRESSURE_TRANSDUCER_BAR,
     PRESSURE_TRANSDUCER_PA,

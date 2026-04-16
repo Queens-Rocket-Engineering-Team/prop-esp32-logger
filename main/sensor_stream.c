@@ -131,8 +131,6 @@ void sensor_stream(void *pvParams) {
                 xLastWakeTime = xTaskGetTickCount(); // update timestamp to avoid double sending packets on change
             }
         }
-        // binary semaphore to prevent weiting to data before sending
-        xSemaphoreTake(app_ctx->network_ctx->udp_send_semaphore_handle, pdMS_TO_TICKS(50));
 
         static qwcp_sensor_data data[CONFIG_NUM_SENSORS] = {0};
 
@@ -158,6 +156,8 @@ void sensor_stream(void *pvParams) {
         };
         // send data packets to the udp send queue
         xQueueSend(app_ctx->network_ctx->udp_send_queue_handle, (void *)&data_packet, MESSAGE_QUEUE_TIMEOUT);
+        // binary semaphore to prevent modifying data struct before sent
+        xSemaphoreTake(app_ctx->network_ctx->udp_send_semaphore_handle, pdMS_TO_TICKS(50));
 
         // if single reading, clear bit to avoid relooping
         if (xEventGroupGetBits(app_ctx->sensor_stream_event_group_handle) & SENSORS_SINGLE_READING_BIT) {

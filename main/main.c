@@ -13,7 +13,7 @@
 #include "wifi_tools.h"
 
 #define WATCHDOG_RESET_TIMEOUT_MIN 5
-#define WATCHDOG_RESET_TIMEOUT_US (WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1000000)
+#define WATCHDOG_RESET_TIMEOUT_US (WATCHDOG_RESET_TIMEOUT_MIN * 60 * 1000000ULL)
 
 static const char *TAG = "MAIN";
 
@@ -59,6 +59,7 @@ void app_main(void) {
 
             xQueueSend(app_ctx.network_ctx->tcp_send_queue_handle, (void *)&payload_out, 0);
             app_ctx.network_ctx->config_sent = true;
+            ESP_LOGI(TAG, "Sent config to server");
         }
         // reset all controls to default state when watchdog timeout triggers
         if (esp_timer_get_time() - last_packet_time_us > WATCHDOG_RESET_TIMEOUT_US) {

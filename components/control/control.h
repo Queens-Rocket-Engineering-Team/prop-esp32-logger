@@ -4,13 +4,13 @@
 #include <esp_err.h>
 #include <stdint.h>
 
-typedef enum {
+typedef enum : uint8_t {
     CONTROL_OPEN,
     CONTROL_CLOSED,
     CONTROL_UNKNOWN,
 } control_state_t;
 
-typedef enum {
+typedef enum : uint8_t {
     CONTROL_NO, // actuator normally open
     CONTROL_NC, // actuator normally closed
 } control_contact_t;
